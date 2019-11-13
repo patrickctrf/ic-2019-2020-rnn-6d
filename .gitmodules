@@ -1,3 +1,6 @@
 [submodule "testes/lstm/TensorFlow-Examples"]
 	path = testes/lstm/TensorFlow-Examples
 	url = git@github.com:aymericdamien/TensorFlow-Examples.git
+[submodule "testes/lstm/Deep-Learning-Experiments"]
+	path = testes/lstm/Deep-Learning-Experiments
+	url = git@github.com:roatienza/Deep-Learning-Experiments.git
