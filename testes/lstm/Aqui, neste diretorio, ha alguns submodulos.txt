@@ -1,0 +1,11 @@
+Na hora de clonar o repositório, utilize do comando abaixo: 
+
+git clone --recurse-submodules https://git... (link para seu clone de repositório)
+
+
+Se você já clonou e esqueceu de chamar os submódulos junto, vá até a pasta principal 
+do repositório e execute o comando abaixo:
+
+git submodule update --init 
+
+(é uma combinação dos comandos "git submodule init" e "git submodule update").
