@@ -1,0 +1,3 @@
+[submodule "testes/lstm/TensorFlow-Examples"]
+	path = testes/lstm/TensorFlow-Examples
+	url = git@github.com:aymericdamien/TensorFlow-Examples.git
