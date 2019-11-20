@@ -1,7 +1,6 @@
 import numpy as np
 import csv
 
-
 # Funcao sera utilizada para encontrar os valores mais próximos ao alinhar o
 # array de temporizacao nas inputs e no ground truth.
 # Retorna o indice do elemento cujo valor eh mais proximo do valor passado.
@@ -9,6 +8,29 @@ def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return idx
+
+def split_dataset(raw_input, raw_output, steps):
+    """
+    Esta funcao recebe a entrada e saida do dataset, ambas no formato (samples, features), onde samples eh igual para
+    ambas, e retorna a entrada e saida para o treinamento, no formato (samples, steps, features) para a entrada X e
+    (features) para a saida Y.
+
+    :param raw_input: Dataset de entrada no formato (samples, features).
+    :param raw_output: Dataset de saida no formato (samples, features).
+    :param steps: Quantos timesteps tera cada entrada para o treinamento.
+    :return: X e Y, respectivamente, uma matriz de (samples, steps, features) para entrada na rede neural e uma matriz com
+    (samples, features) de dimensao, sendo a resposta esperada para cada valor de saida a cada sample.
+    """
+
+    X = []
+    Y = []
+
+    for single_input, i in zip(raw_input, range(raw_input.shape[0])):
+        if i + steps < raw_input.shape[0]:
+            X.append(raw_input[i:i+steps])
+            Y.append(raw_output[i+steps])
+
+    return np.array(X), np.array(Y)
 
 
 #===============================================================================
@@ -205,3 +227,16 @@ for i,j in zip(timestampList[0:100], timestampListGroundTruth[0:100]):
 print(max((i-j).min(), (i-j).max(), key=abs))
 
 #===============================================================================
+
+# Concatenating input data.
+
+# raw_input = np.concatenate([[timestampList], [accelX], [accelY], [accelZ], [gyroX], [gyroY], [gyroZ]], axis=1)
+
+# (28730 amostras, 7 sensores)
+raw_input = np.array([timestampList, accelX, accelY, accelZ, gyroX, gyroY, gyroZ]).T
+
+raw_output = np.array([positionX, positionY, positionZ, quaternionW, quaternionX, quaternionY, quaternionZ]).T
+
+X,Y = split_dataset(raw_input, raw_output, steps=10)
+
+raw_input[0]
