@@ -1,13 +1,23 @@
 import numpy as np
 import csv
 
-# Funcao sera utilizada para encontrar os valores mais próximos ao alinhar o
-# array de temporizacao nas inputs e no ground truth.
-# Retorna o indice do elemento cujo valor eh mais proximo do valor passado.
+from keras import Sequential
+from keras.layers import TimeDistributed, Dense, LSTM, Dropout
+
+
 def find_nearest(array, value):
+    """
+    Funcao sera utilizada para encontrar os valores mais próximos ao alinhar o
+    array de temporizacao nas inputs e no ground truth.
+    Retorna o indice do elemento cujo valor eh mais proximo do valor passado.
+    :param array: O array de valores onde buscaremos o valor mais proximo de "value".
+    :param value: O valor aproximado a ser bucado no "array".
+    :return: O indice do elemento do "array" cujo valor eh mais proximo de "value".
+    """
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return idx
+
 
 def split_dataset(raw_input, raw_output, steps):
     """
@@ -25,15 +35,15 @@ def split_dataset(raw_input, raw_output, steps):
     X = []
     Y = []
 
-    for single_input, i in zip(raw_input, range(raw_input.shape[0])):
+    for i in range(raw_input.shape[0]):
         if i + steps < raw_input.shape[0]:
-            X.append(raw_input[i:i+steps])
-            Y.append(raw_output[i+steps])
+            X.append(raw_input[i:i + steps])
+            Y.append(raw_output[i + steps])
 
     return np.array(X), np.array(Y)
 
 
-#===============================================================================
+# ===============================================================================
 
 # Vamos ate o diretorio onde estao os dados de acelerometro e giroscopio da IMU
 # e obtemos os dados dos mesmos no formato de listas.
@@ -70,7 +80,7 @@ with open('/mnt/447acb07-56ed-4e48-842c-bd311a12cf0a/Downloads/dataset-room2_512
             line_count += 1
     print(f'Processed {line_count} lines.')
 
-#===============================================================================
+# ===============================================================================
 
 # Vamos ate o diretorio onde estao os dados de ground truth e obtemos os dados
 # de translacao nos eixos X,Y e Z, bem como os dados de rotacao na notacao de
@@ -112,7 +122,7 @@ with open('/mnt/447acb07-56ed-4e48-842c-bd311a12cf0a/Downloads/dataset-room2_512
             line_count += 1
     print(f'Processed {line_count} lines.')
 
-#===============================================================================
+# ===============================================================================
 
 # It's better to work with numpy arrays than lists.
 
@@ -172,7 +182,7 @@ elif idxIMU < idxGndTruth:
 
 # If they are the same, no need to cut anything.
 
-#===============================================================================
+# ===============================================================================
 
 # Regularizando/Alinhando o TAMANHO das listas de input e ground truth do dataset (Precisam ter o mesmo tamanho).
 # Obs: Nao sao mais listas do python, sao arrays de float no numpy.
@@ -189,7 +199,6 @@ novoQuaternionY = []
 novoQuaternionZ = []
 
 for timeElement, i in zip(timestampList, range(len(timestampList))):
-
     idx = find_nearest(timestampListGroundTruth, timeElement)
 
     novoTimestampListGroundTruth.append(timestampListGroundTruth[idx])
@@ -214,29 +223,48 @@ quaternionX = np.float64(novoQuaternionX)
 quaternionY = np.float64(novoQuaternionY)
 quaternionZ = np.float64(novoQuaternionZ)
 
-#===============================================================================
+# ===============================================================================
 
 # Here you can check if both time stamps (from IMU and ground truth) are aligned
 # and have the same size. Check the maximum deviation too.
 
 # Each timestamp and their difference.
-for i,j in zip(timestampList[0:100], timestampListGroundTruth[0:100]):
-    print(i, '\t\t', j, '\t\t', i-j)
+for i, j in zip(timestampList[0:100], timestampListGroundTruth[0:100]):
+    print(i, '\t\t', j, '\t\t', i - j)
 
 # Maximum deviation in total timestamp.
-print(max((i-j).min(), (i-j).max(), key=abs))
+print(max((i - j).min(), (i - j).max(), key=abs))
 
-#===============================================================================
+# ===============================================================================
 
 # Concatenating input data.
-
-# raw_input = np.concatenate([[timestampList], [accelX], [accelY], [accelZ], [gyroX], [gyroY], [gyroZ]], axis=1)
 
 # (28730 amostras, 7 sensores)
 raw_input = np.array([timestampList, accelX, accelY, accelZ, gyroX, gyroY, gyroZ]).T
 
+# (28730 amostras de ground truth, 7 graus de liberdade)
 raw_output = np.array([positionX, positionY, positionZ, quaternionW, quaternionX, quaternionY, quaternionZ]).T
 
-X,Y = split_dataset(raw_input, raw_output, steps=10)
+# Entradas do dataset (X) e suas respectivas saidas (Y).
+n_steps = 10
+X, Y = split_dataset(raw_input, raw_output, steps=n_steps)
 
-raw_input[0]
+# ===============================================================================
+
+model = Sequential()
+model.add(TimeDistributed(Dense(256), input_shape=(X.shape[1], X.shape[2])))
+model.add(Dropout(0.5))
+model.add(TimeDistributed(Dense(256)))
+model.add(LSTM(256, activation='relu'))
+model.add(Dense(X.shape[2]))
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# fit model
+model.fit(X, Y, epochs=200)
+
+
+# # demonstrate prediction
+# x_input = np.array([70, 80, 90])
+# x_input = x_input.reshape((1, n_steps, n_features))
+# yhat = model.predict(x_input, verbose=0)
+# print(yhat)
