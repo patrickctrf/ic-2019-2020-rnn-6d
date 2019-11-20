@@ -38,10 +38,12 @@ def split_dataset(raw_input, raw_output, steps):
     for i in range(raw_input.shape[0]):
         if i + steps < raw_input.shape[0]:
             X.append(raw_input[i:i + steps])
-            Y.append(raw_output[i + steps])
+
+            # Estamos calculando quanto a posicao VARIOU durante esta amostra,
+            # nao a localizacao absoluta atual.
+            Y.append(raw_output[i + steps] - raw_output[i])
 
     return np.array(X), np.array(Y)
-
 
 # ===============================================================================
 
@@ -246,21 +248,23 @@ raw_input = np.array([timestampList, accelX, accelY, accelZ, gyroX, gyroY, gyroZ
 raw_output = np.array([positionX, positionY, positionZ, quaternionW, quaternionX, quaternionY, quaternionZ]).T
 
 # Entradas do dataset (X) e suas respectivas saidas (Y).
-n_steps = 10
+n_steps = 30
 X, Y = split_dataset(raw_input, raw_output, steps=n_steps)
 
 # ===============================================================================
 
+neuroniosCamada1 = 256
+
 model = Sequential()
-model.add(TimeDistributed(Dense(256), input_shape=(X.shape[1], X.shape[2])))
+model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh'), input_shape=(X.shape[1], X.shape[2])))
 model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(256)))
-model.add(LSTM(256, activation='relu'))
-model.add(Dense(X.shape[2]))
+model.add(TimeDistributed(Dense(256, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
+model.add(LSTM(256, activation='tanh'))
+model.add(Dense(X.shape[2], activation='tanh'))
 model.compile(optimizer='adam', loss='mean_squared_error')
 
 # fit model
-model.fit(X, Y, epochs=200)
+model.fit(X, Y, epochs=20)
 
 
 # # demonstrate prediction

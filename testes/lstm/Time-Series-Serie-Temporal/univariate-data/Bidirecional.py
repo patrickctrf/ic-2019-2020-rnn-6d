@@ -37,7 +37,7 @@ model.add(Bidirectional(LSTM(50, activation='relu'), input_shape=(n_steps, n_fea
 model.add(Dense(1))
 model.compile(optimizer='adam', loss='mse')
 # fit model
-model.fit(X, y, epochs=200, verbose=0)
+model.fit(X, y, epochs=200)
 # demonstrate prediction
 x_input = array([70, 80, 90])
 x_input = x_input.reshape((1, n_steps, n_features))
