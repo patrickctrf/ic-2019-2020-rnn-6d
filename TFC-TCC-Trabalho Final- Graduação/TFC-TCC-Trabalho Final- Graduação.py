@@ -254,18 +254,19 @@ X, Y = split_dataset(raw_input, raw_output, steps=n_steps)
 # ===============================================================================
 
 neuroniosCamada1 = 256
+neuroniosCamada2 = 256
 
 model = Sequential()
 model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh'), input_shape=(X.shape[1], X.shape[2])))
 model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(256, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
+model.add(TimeDistributed(Dense(neuroniosCamada2, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
+model.add(Dropout(0.5))
 model.add(LSTM(256, activation='tanh'))
 model.add(Dense(X.shape[2], activation='tanh'))
 model.compile(optimizer='adam', loss='mean_squared_error')
 
 # fit model
-model.fit(X, Y, epochs=20)
-
+model.fit(X, Y, epochs=300)
 
 # # demonstrate prediction
 # x_input = np.array([70, 80, 90])
