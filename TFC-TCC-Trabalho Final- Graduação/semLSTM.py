@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from keras import Sequential
 from keras.engine.saving import model_from_json
-from keras.layers import TimeDistributed, Dense, LSTM, Dropout
+from keras.layers import TimeDistributed, Dense, LSTM, Dropout, Flatten
 from keras.utils import plot_model
 
 
@@ -46,7 +46,12 @@ def split_dataset(raw_input, raw_output, steps):
             # nao a localizacao absoluta atual.
             Y.append(raw_output[i + steps] - raw_output[i])
 
-    return np.array(X), np.array(Y)
+    X_ = []
+
+    for i in X:
+        X_.append(i.flatten())
+
+    return np.array(X), np.array(Y), np.array(X_)
 
 
 #===============================================================================
@@ -157,7 +162,7 @@ quaternionZ = np.float64(quaternionZ)
 
 # IMU data is not aligned to ground truth yet, they need to start togheter.
 
-# We don't know which one started recording first. The biggest index from 
+# We don't know which one started recording first. The biggest index from
 # "find_nearest" will tell us that.
 idxIMU = find_nearest(timestampList, timestampListGroundTruth[0])
 idxGndTruth = find_nearest(timestampListGroundTruth, timestampList[0])
@@ -266,54 +271,52 @@ raw_output = np.array([positionX, positionY, positionZ, quaternionW, quaternionX
 
 # Entradas do dataset (X) e suas respectivas saidas (Y).
 n_steps = 30
-X, Y = split_dataset(raw_input, raw_output, steps=n_steps)
+X, Y, X_= split_dataset(raw_input, raw_output, steps=n_steps)
 
 #===============================================================================
 
-neuroniosCamada1 = 256
-neuroniosCamada2 = 256
-
-model = Sequential()
-model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh'), input_shape=(X.shape[1], X.shape[2])))
-model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(neuroniosCamada2, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
-model.add(Dropout(0.5))
-model.add(LSTM(200, activation='tanh'))
-model.add(Dense(256, activation='tanh'))
-model.add(Dropout(0.5))
-model.add(Dense(X.shape[2]))
-model.compile(optimizer='nadam', loss='mean_squared_error')
-
-# fit model
-model.fit(X, Y, epochs=5)
-
-#==================================================================================
-
-# Saving model
-
-# %cd /content/sample_data
-
-model_json = model.to_json()
-json_file = open("model.json", "w")
-json_file.write(model_json)
-json_file.close()
-model.save_weights("model.h5")
-print("Model saved to disk")
-
-# # load json and create model
-# json_file = open('model.json', 'r')
-# loaded_model_json = json_file.read()
+# neuroniosCamada1 = 4096
+# neuroniosCamada2 = 4096
+#
+# model = Sequential()
+# model.add(Dense(neuroniosCamada1, activation='tanh', input_shape=(210,)))
+# model.add(Dropout(0.5))
+# model.add(Dense(neuroniosCamada2, activation='tanh'))
+# model.add(Dropout(0.5))
+# model.add(Dense(X.shape[2]))
+# model.compile(optimizer='nadam', loss='mean_squared_error')
+#
+#
+#
+# # fit model
+# model.fit(X_, Y, epochs=5)
+#
+# #==================================================================================
+#
+# # Print model
+# plot_model(model, to_file='model.png')
+#
+# # Saving model
+#
+# # %cd /content/sample_data
+#
+# model_json = model.to_json()
+# json_file = open("model.json", "w")
+# json_file.write(model_json)
 # json_file.close()
-# loaded_model = model_from_json(loaded_model_json)
-# # load weights into new model
-# loaded_model.load_weights("model.h5")
-# print("Loaded model from disk")
+# model.save_weights("model.h5")
+# print("Model saved to disk")
 
-# model = loaded_model
+# load json and create model
+json_file = open('model.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+loaded_model = model_from_json(loaded_model_json)
+# load weights into new model
+loaded_model.load_weights("model.h5")
+print("Loaded model from disk")
 
-# Print model
-plot_model(model, to_file='model.png')
-
+model = loaded_model
 
 Ycalc = []
 
@@ -322,7 +325,7 @@ Ycalc = []
 #
 #     #model.predict(X[i].reshape(1, X.shape[1], X.shape[2]))
 
-Ycalc = model.predict(X)
+Ycalc = model.predict(X_)
 
 plt.plot(timestampList[30:], [i[0] for i in Y], 'r--', timestampList[30:], [i[0] for i in Ycalc], 'bs')
 plt.show()
