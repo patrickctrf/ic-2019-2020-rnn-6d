@@ -1,8 +1,11 @@
 import numpy as np
 import csv
+import matplotlib.pyplot as plt
 
 from keras import Sequential
+from keras.engine.saving import model_from_json
 from keras.layers import TimeDistributed, Dense, LSTM, Dropout
+from keras.utils import plot_model
 
 
 def find_nearest(array, value):
@@ -45,7 +48,8 @@ def split_dataset(raw_input, raw_output, steps):
 
     return np.array(X), np.array(Y)
 
-# ===============================================================================
+
+#===============================================================================
 
 # Vamos ate o diretorio onde estao os dados de acelerometro e giroscopio da IMU
 # e obtemos os dados dos mesmos no formato de listas.
@@ -82,7 +86,7 @@ with open('/mnt/447acb07-56ed-4e48-842c-bd311a12cf0a/Downloads/dataset-room2_512
             line_count += 1
     print(f'Processed {line_count} lines.')
 
-# ===============================================================================
+#===============================================================================
 
 # Vamos ate o diretorio onde estao os dados de ground truth e obtemos os dados
 # de translacao nos eixos X,Y e Z, bem como os dados de rotacao na notacao de
@@ -124,7 +128,7 @@ with open('/mnt/447acb07-56ed-4e48-842c-bd311a12cf0a/Downloads/dataset-room2_512
             line_count += 1
     print(f'Processed {line_count} lines.')
 
-# ===============================================================================
+#===============================================================================
 
 # It's better to work with numpy arrays than lists.
 
@@ -184,7 +188,7 @@ elif idxIMU < idxGndTruth:
 
 # If they are the same, no need to cut anything.
 
-# ===============================================================================
+#===============================================================================
 
 # Regularizando/Alinhando o TAMANHO das listas de input e ground truth do dataset (Precisam ter o mesmo tamanho).
 # Obs: Nao sao mais listas do python, sao arrays de float no numpy.
@@ -225,7 +229,7 @@ quaternionX = np.float64(novoQuaternionX)
 quaternionY = np.float64(novoQuaternionY)
 quaternionZ = np.float64(novoQuaternionZ)
 
-# ===============================================================================
+#===============================================================================
 
 # Here you can check if both time stamps (from IMU and ground truth) are aligned
 # and have the same size. Check the maximum deviation too.
@@ -237,7 +241,20 @@ for i, j in zip(timestampList[0:100], timestampListGroundTruth[0:100]):
 # Maximum deviation in total timestamp.
 print(max((i - j).min(), (i - j).max(), key=abs))
 
-# ===============================================================================
+#===============================================================================
+
+# Normalizando dados antes de inserir como entrada. MUITO IMPORTANTE.
+
+accelX = accelX/np.max(accelX)
+accelY = accelY/np.max(accelY)
+accelZ = accelZ/np.max(accelZ)
+
+gyroX = gyroX/np.max(gyroX)
+gyroY = gyroY/np.max(gyroY)
+gyroZ = gyroZ/np.max(gyroZ)
+
+timestampList = timestampList - np.min(timestampList)
+timestampList = timestampList/np.max(timestampList)
 
 # Concatenating input data.
 
@@ -251,7 +268,7 @@ raw_output = np.array([positionX, positionY, positionZ, quaternionW, quaternionX
 n_steps = 30
 X, Y = split_dataset(raw_input, raw_output, steps=n_steps)
 
-# ===============================================================================
+#===============================================================================
 
 neuroniosCamada1 = 256
 neuroniosCamada2 = 256
@@ -261,12 +278,54 @@ model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh'), input_shap
 model.add(Dropout(0.5))
 model.add(TimeDistributed(Dense(neuroniosCamada2, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
 model.add(Dropout(0.5))
-model.add(LSTM(256, activation='tanh'))
-model.add(Dense(X.shape[2], activation='tanh'))
-model.compile(optimizer='adam', loss='mean_squared_error')
+model.add(LSTM(200, activation='tanh'))
+model.add(Dense(256, activation='tanh'))
+model.add(Dropout(0.5))
+model.add(Dense(X.shape[2]))
+model.compile(optimizer='nadam', loss='mean_squared_error')
 
 # fit model
-model.fit(X, Y, epochs=300)
+model.fit(X, Y, epochs=5)
+
+#==================================================================================
+
+# Saving model
+
+# %cd /content/sample_data
+
+model_json = model.to_json()
+json_file = open("model.json", "w")
+json_file.write(model_json)
+json_file.close()
+model.save_weights("model.h5")
+print("Model saved to disk")
+
+# # load json and create model
+# json_file = open('model.json', 'r')
+# loaded_model_json = json_file.read()
+# json_file.close()
+# loaded_model = model_from_json(loaded_model_json)
+# # load weights into new model
+# loaded_model.load_weights("model.h5")
+# print("Loaded model from disk")
+
+# model = loaded_model
+
+# Print model
+plot_model(model, to_file='model.png')
+
+
+Ycalc = []
+
+# for i in range(len(Y) - n_steps):
+#     print("Gerando predições", i)
+#
+#     #model.predict(X[i].reshape(1, X.shape[1], X.shape[2]))
+
+Ycalc = model.predict(X)
+
+plt.plot(timestampList[30:], [i[0] for i in Y], 'r--', timestampList[30:], [i[0] for i in Ycalc], 'bs')
+plt.show()
 
 # # demonstrate prediction
 # x_input = np.array([70, 80, 90])
