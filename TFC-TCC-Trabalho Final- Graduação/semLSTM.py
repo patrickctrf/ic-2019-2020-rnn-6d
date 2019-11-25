@@ -275,48 +275,50 @@ X, Y, X_= split_dataset(raw_input, raw_output, steps=n_steps)
 
 #===============================================================================
 
-# neuroniosCamada1 = 4096
-# neuroniosCamada2 = 4096
-#
-# model = Sequential()
-# model.add(Dense(neuroniosCamada1, activation='tanh', input_shape=(210,)))
-# model.add(Dropout(0.5))
-# model.add(Dense(neuroniosCamada2, activation='tanh'))
-# model.add(Dropout(0.5))
-# model.add(Dense(X.shape[2]))
-# model.compile(optimizer='nadam', loss='mean_squared_error')
-#
-#
-#
-# # fit model
-# model.fit(X_, Y, epochs=5)
-#
-# #==================================================================================
-#
-# # Print model
-# plot_model(model, to_file='model.png')
-#
-# # Saving model
-#
-# # %cd /content/sample_data
-#
-# model_json = model.to_json()
-# json_file = open("model.json", "w")
-# json_file.write(model_json)
-# json_file.close()
-# model.save_weights("model.h5")
-# print("Model saved to disk")
+neuroniosCamada1 = 2048
+neuroniosCamada2 = 2048
 
-# load json and create model
-json_file = open('model.json', 'r')
-loaded_model_json = json_file.read()
+model = Sequential()
+model.add(Dense(neuroniosCamada1, activation='tanh', input_shape=(210,)))
+model.add(Dropout(0.5))
+model.add(Dense(neuroniosCamada2, activation='tanh'))
+model.add(Dropout(0.5))
+model.add(Dense(2048, activation='tanh'))
+model.add(Dropout(0.5))
+model.add(Dense(X.shape[2]))
+model.compile(optimizer='nadam', loss='mean_squared_error')
+
+
+
+# fit model
+model.fit(X_, Y, epochs=30)
+
+#==================================================================================
+
+# Saving model
+
+# %cd /content/sample_data
+
+model_json = model.to_json()
+json_file = open("modelDENSE.json", "w")
+json_file.write(model_json)
 json_file.close()
-loaded_model = model_from_json(loaded_model_json)
-# load weights into new model
-loaded_model.load_weights("model.h5")
-print("Loaded model from disk")
+model.save_weights("modelDENSE.h5")
+print("Model saved to disk")
 
-model = loaded_model
+# # load json and create model
+# json_file = open('modelDENSE.json', 'r')
+# loaded_model_json = json_file.read()
+# json_file.close()
+# loaded_model = model_from_json(loaded_model_json)
+# # load weights into new model
+# loaded_model.load_weights("modelDENSE.h5")
+# print("Loaded model from disk")
+#
+# model = loaded_model
+
+# Print model
+plot_model(model, to_file='modelDENSE.png')
 
 Ycalc = []
 

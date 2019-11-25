@@ -2,9 +2,10 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-from keras import Sequential
+from keras import Sequential, Input, Model
 from keras.engine.saving import model_from_json
 from keras.layers import TimeDistributed, Dense, LSTM, Dropout
+from keras.optimizers import SGD
 from keras.utils import plot_model
 
 
@@ -270,24 +271,39 @@ X, Y = split_dataset(raw_input, raw_output, steps=n_steps)
 
 #===============================================================================
 
-neuroniosCamada1 = 256
-neuroniosCamada2 = 256
+# neuroniosCamada1 = 256
+# neuroniosCamada2 = 1800
+#
+# model = Sequential()
+# model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh'), input_shape=(X.shape[1], X.shape[2])))
+# model.add(Dropout(0.5))
+# model.add(TimeDistributed(Dense(neuroniosCamada2, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
+# model.add(Dropout(0.5))
+# model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh')))
+# model.add(Dropout(0.5))
+# model.add(LSTM(500, activation='tanh'))
+# model.add(Dense(256, activation='tanh'))
+# model.add(Dropout(0.5))
+# model.add(Dense(X.shape[2]))
+# model.compile(optimizer='nadam', loss='mean_squared_error')
+#
+#
+# #==================================================================================
 
-model = Sequential()
-model.add(TimeDistributed(Dense(neuroniosCamada1, activation='tanh'), input_shape=(X.shape[1], X.shape[2])))
-model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(neuroniosCamada2, activation='tanh'), input_shape=(X.shape[1], neuroniosCamada1)))
-model.add(Dropout(0.5))
-model.add(LSTM(200, activation='tanh'))
-model.add(Dense(256, activation='tanh'))
-model.add(Dropout(0.5))
-model.add(Dense(X.shape[2]))
-model.compile(optimizer='nadam', loss='mean_squared_error')
+# load json and create model
+json_file = open('model.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+loaded_model = model_from_json(loaded_model_json)
+# load weights into new model
+loaded_model.load_weights("model.h5")
+print("Loaded model from disk")
 
-# fit model
-model.fit(X, Y, epochs=5)
+model = loaded_model
 
-#==================================================================================
+# # fit model
+model.compile(optimizer=SGD(lr=0.0001, momentum=0.5, nesterov=True), loss='mean_squared_error')
+model.fit(X, Y, epochs=250)
 
 # Saving model
 
@@ -300,19 +316,8 @@ json_file.close()
 model.save_weights("model.h5")
 print("Model saved to disk")
 
-# # load json and create model
-# json_file = open('model.json', 'r')
-# loaded_model_json = json_file.read()
-# json_file.close()
-# loaded_model = model_from_json(loaded_model_json)
-# # load weights into new model
-# loaded_model.load_weights("model.h5")
-# print("Loaded model from disk")
-
-# model = loaded_model
-
 # Print model
-plot_model(model, to_file='model.png')
+plot_model(model, to_file='model.png',show_shapes=True)
 
 
 Ycalc = []
@@ -322,7 +327,7 @@ Ycalc = []
 #
 #     #model.predict(X[i].reshape(1, X.shape[1], X.shape[2]))
 
-Ycalc = model.predict(X)
+Ycalc = model.predict(X, verbose=1)
 
 plt.plot(timestampList[30:], [i[0] for i in Y], 'r--', timestampList[30:], [i[0] for i in Ycalc], 'bs')
 plt.show()
