@@ -315,119 +315,120 @@ Xt, Yt, Xt_1, Yt_1 = split_dataset(raw_input, raw_output, steps=n_steps)
 
 # ===============================================================================
 
-
-neuroniosCamada1 = 50
-neuroniosCamada2 = 50
-neuroniosCamada3 = 50
-neuroniosCamada4 = 50
-
-input4 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
-output4 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
-    input4)
-output4 = Dropout(0.5)(output4)
-output4 = TimeDistributed(Dense(neuroniosCamada2, activation=LeakyReLU(alpha=0.3)))(output4)
-output4 = Dropout(0.5)(output4)
-output4 = TimeDistributed(Dense(neuroniosCamada3, activation=LeakyReLU(alpha=0.3)))(output4)
-output4 = Dropout(0.5)(output4)
-output4 = TimeDistributed(Dense(neuroniosCamada4, activation=LeakyReLU(alpha=0.3)))(output4)
-output4 = Dropout(0.5)(output4)
-
-input3 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
-output3 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
-    input3)
-output3 = Dropout(0.3)(output3)
-output3 = TimeDistributed(Dense(neuroniosCamada2, activation=LeakyReLU(alpha=0.3)))(output3)
-output3 = Dropout(0.3)(output3)
-output3 = TimeDistributed(Dense(neuroniosCamada3, activation=LeakyReLU(alpha=0.3)))(output3)
-output3 = Dropout(0.3)(output3)
-
-input2 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
-output2 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
-    input2)
-output2 = Dropout(0.5)(output2)
-output2 = TimeDistributed(Dense(neuroniosCamada2, activation=LeakyReLU(alpha=0.3)))(output2)
-output2 = Dropout(0.5)(output2)
-
-input1 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
-output1 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
-    input1)
-output1 = Dropout(0.5)(output1)
-
-merged = concatenate([output4, output3, output2, output1])
-
-merged_0 = LSTM(50, activation=LeakyReLU(alpha=0.3), return_sequences=True)(merged)
-merged = LSTM(50, activation=LeakyReLU(alpha=0.3))(merged_0)
-merged = Dense(50, activation=LeakyReLU(alpha=0.3))(merged)
-merged = Dropout(0.5)(merged)
-merged = Dense(Yt_1.shape[1])(merged)
-
-# Segunda etapa
-input4_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
-output4_2 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt.shape[1], Xt.shape[2]))(
-    input4_2)
-output4_2 = Dropout(0.5)(output4_2)
-output4_2 = TimeDistributed(Dense(neuroniosCamada2, activation=LeakyReLU(alpha=0.3)))(output4_2)
-output4_2 = Dropout(0.5)(output4_2)
-output4_2 = TimeDistributed(Dense(neuroniosCamada3, activation=LeakyReLU(alpha=0.3)))(output4_2)
-output4_2 = Dropout(0.5)(output4_2)
-output4_2 = TimeDistributed(Dense(neuroniosCamada4, activation=LeakyReLU(alpha=0.3)))(output4_2)
-output4_2 = Dropout(0.5)(output4_2)
-
-input3_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
-output3_2 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt.shape[1], Xt.shape[2]))(
-    input3_2)
-output3_2 = Dropout(0.3)(output3_2)
-output3_2 = TimeDistributed(Dense(neuroniosCamada2, activation=LeakyReLU(alpha=0.3)))(output3_2)
-output3_2 = Dropout(0.3)(output3_2)
-output3_2 = TimeDistributed(Dense(neuroniosCamada3, activation=LeakyReLU(alpha=0.3)))(output3_2)
-output3_2 = Dropout(0.3)(output3_2)
-
-input2_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
-output2_2 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt.shape[1], Xt.shape[2]))(
-    input2_2)
-output2_2 = Dropout(0.5)(output2_2)
-output2_2 = TimeDistributed(Dense(neuroniosCamada2, activation=LeakyReLU(alpha=0.3)))(output2_2)
-output2_2 = Dropout(0.5)(output2_2)
-
-input1_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
-output1_2 = TimeDistributed(Dense(neuroniosCamada1, activation=LeakyReLU(alpha=0.3)), input_shape=(Xt.shape[1], Xt.shape[2]))(
-    input1_2)
-output1_2 = Dropout(0.5)(output1_2)
-
-merged_2 = concatenate([output4_2, output3_2, output2_2, output1_2, merged_0])
-
-merged_2 = LSTM(50, activation=LeakyReLU(alpha=0.3))(merged_2)
-merged_2 = Dense(50, activation=LeakyReLU(alpha=0.3))(merged_2)
-merged_2 = concatenate([merged_2, merged])
-merged_2 = Dense(50, activation=LeakyReLU(alpha=0.3))(merged_2)
-merged_2 = Dropout(0.5)(merged_2)
-merged_2 = Dense(Yt.shape[1])(merged_2)
-
-model = Model(inputs=[input4_2, input3_2, input2_2, input1_2, input4, input3, input2, input1],
-              outputs=[merged_2, merged])
-
-model.compile(optimizer="nadam", loss='mean_squared_error')
-
-# Print model
-plot_model(model, to_file='2etapas.png', show_shapes=True)
-
-# Xfinal = repeteMatrizDataset(Xt, Xt_1, 4)
-
-# fit model
-model.fit([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], [Yt, Yt_1], epochs=5)
+# neuroniosCamada1 = 50
+# neuroniosCamada2 = 50
+# neuroniosCamada3 = 50
+# neuroniosCamada4 = 50
+#
+# input4 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
+# output4 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
+#     input4)
+# output4 = Dropout(0.5)(output4)
+# output4 = TimeDistributed(Dense(neuroniosCamada2, activation="tanh"))(output4)
+# output4 = Dropout(0.5)(output4)
+# output4 = TimeDistributed(Dense(neuroniosCamada3, activation="tanh"))(output4)
+# output4 = Dropout(0.5)(output4)
+# output4 = TimeDistributed(Dense(neuroniosCamada4, activation="tanh"))(output4)
+# output4 = Dropout(0.5)(output4)
+#
+# input3 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
+# output3 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
+#     input3)
+# output3 = Dropout(0.3)(output3)
+# output3 = TimeDistributed(Dense(neuroniosCamada2, activation="tanh"))(output3)
+# output3 = Dropout(0.3)(output3)
+# output3 = TimeDistributed(Dense(neuroniosCamada3, activation="tanh"))(output3)
+# output3 = Dropout(0.3)(output3)
+#
+# input2 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
+# output2 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
+#     input2)
+# output2 = Dropout(0.5)(output2)
+# output2 = TimeDistributed(Dense(neuroniosCamada2, activation="tanh"))(output2)
+# output2 = Dropout(0.5)(output2)
+#
+# input1 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
+# output1 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
+#     input1)
+# output1 = Dropout(0.5)(output1)
+#
+# merged = concatenate([output4, output3, output2, output1])
+#
+# merged_0 = LSTM(50, activation="tanh", return_sequences=True)(merged)
+# merged = LSTM(50, activation="tanh")(merged_0)
+# merged = Dense(50, activation="tanh")(merged)
+# merged = Dropout(0.5)(merged)
+# merged = Dense(Yt_1.shape[1])(merged)
+#
+#
+#
+# # Segunda etapa
+# input4_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
+# output4_2 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt.shape[1], Xt.shape[2]))(
+#     input4_2)
+# output4_2 = Dropout(0.5)(output4_2)
+# output4_2 = TimeDistributed(Dense(neuroniosCamada2, activation="tanh"))(output4_2)
+# output4_2 = Dropout(0.5)(output4_2)
+# output4_2 = TimeDistributed(Dense(neuroniosCamada3, activation="tanh"))(output4_2)
+# output4_2 = Dropout(0.5)(output4_2)
+# output4_2 = TimeDistributed(Dense(neuroniosCamada4, activation="tanh"))(output4_2)
+# output4_2 = Dropout(0.5)(output4_2)
+#
+# input3_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
+# output3_2 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt.shape[1], Xt.shape[2]))(
+#     input3_2)
+# output3_2 = Dropout(0.3)(output3_2)
+# output3_2 = TimeDistributed(Dense(neuroniosCamada2, activation="tanh"))(output3_2)
+# output3_2 = Dropout(0.3)(output3_2)
+# output3_2 = TimeDistributed(Dense(neuroniosCamada3, activation="tanh"))(output3_2)
+# output3_2 = Dropout(0.3)(output3_2)
+#
+# input2_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
+# output2_2 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt.shape[1], Xt.shape[2]))(
+#     input2_2)
+# output2_2 = Dropout(0.5)(output2_2)
+# output2_2 = TimeDistributed(Dense(neuroniosCamada2, activation="tanh"))(output2_2)
+# output2_2 = Dropout(0.5)(output2_2)
+#
+# input1_2 = Input(shape=(Xt.shape[1], Xt.shape[2]))
+# output1_2 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt.shape[1], Xt.shape[2]))(
+#     input1_2)
+# output1_2 = Dropout(0.5)(output1_2)
+#
+# merged_2 = concatenate([output4_2, output3_2, output2_2, output1_2, merged_0])
+#
+# merged_2 = LSTM(50, activation="tanh")(merged_2)
+# merged_2 = Dense(50, activation="tanh")(merged_2)
+# merged_2 = concatenate([merged_2, merged])
+# merged_2 = Dense(50, activation="tanh")(merged_2)
+# merged_2 = Dropout(0.5)(merged_2)
+# merged_2 = Dense(Yt.shape[1])(merged_2)
+#
+# model = Model(inputs=[input4_2, input3_2, input2_2, input1_2, input4, input3, input2, input1],
+#               outputs=[merged_2, merged])
+#
+# model.compile(optimizer="nadam", loss='mean_squared_error')
+#
+# # Print model
+# plot_model(model, to_file='2etapas.png', show_shapes=True)
+#
+# # Xfinal = repeteMatrizDataset(Xt, Xt_1, 4)
+#
+# # fit model
+# model.fit([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], [Yt, Yt_1], epochs=5)
 
 #==================================================================================
 
-# # load json and create model
-# json_file = open('model.json', 'r')
-# loaded_model_json = json_file.read()
-# json_file.close()
-# loaded_model = model_from_json(loaded_model_json)
-# # load weights into new model
-# loaded_model.load_weights("model.h5")
-# print("Loaded model from disk")
-#
-# model = loaded_model
+# load json and create model
+json_file = open('model2etapas.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+loaded_model = model_from_json(loaded_model_json)
+# load weights into new model
+loaded_model.load_weights("model2etapas.h5")
+print("Loaded model from disk")
+
+model = loaded_model
 # # fit model
 # model.compile(optimizer=SGD(lr=0.0001, momentum=0.5, nesterov=True), loss='mean_squared_error')
 # model.fit(Xt, Yt, epochs=250)
@@ -447,15 +448,31 @@ model.fit([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], [Yt, Yt_1], epochs=5)
 plot_model(model, to_file='model2etapas.png', show_shapes=True)
 
 Ycalc = []
+Ytrajetoria = []
 
 # for i in range(len(Y) - n_steps):
 #     print("Gerando predições", i)
 #
 #     #model.predict(X[i].reshape(1, Xt.shape[1], Xt.shape[2]))
 
-Ycalc = model.predict([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], verbose=1)
+# Ycalc = model.predict([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], verbose=1)
 
-plt.plot(timestampList[31:], [i[0] for i in Yt], timestampList[31:], [i[0] for i in Ycalc[0]])
+
+# A posição inicial do robo eh conhecida, entao passamos apenas ela para o sistema.
+Ytrajetoria.append(Yt_1[0])
+# Iterando sobre cada SAMPLE.
+for i in range(Xt.shape[0]):
+    print("Executando iteração:", i)
+    # Iterando sobre cada STEP
+    for j in range(Xt.shape[1]):
+        # Iterando sobre cada SAIDA
+        for k in range(Yt.shape[1]):
+            Xt_1[i][j][k] = Ytrajetoria[i][k]
+    # Depois de preencher cada sample por completo, faz o 'predict' dela.
+    Ytrajetoria.append(model.predict([Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]).reshape(1, Xt_1.shape[1], Xt_1.shape[2])], verbose=1)[0][0])
+
+# plt.plot(timestampList[31:], [i[0] for i in Yt], timestampList[31:], [i[0] for i in Ycalc[0]])
+plt.plot(timestampList[31:], [i[0] for i in Yt], timestampList[31:], [i[0] for i in Ytrajetoria[:-1]])
 plt.show()
 
 # # demonstrate prediction
