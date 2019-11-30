@@ -415,7 +415,7 @@ Xt, Yt, Xt_1, Yt_1 = split_dataset(raw_input, raw_output, steps=n_steps)
 # # Xfinal = repeteMatrizDataset(Xt, Xt_1, 4)
 #
 # # fit model
-# model.fit([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], [Yt, Yt_1], epochs=5)
+# model.fit([Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)]], [Yt[1:int(len(Xt)/2)], Yt_1[1:int(len(Xt)/2)]], epochs=5)
 
 #==================================================================================
 
@@ -429,9 +429,6 @@ loaded_model.load_weights("model2etapas.h5")
 print("Loaded model from disk")
 
 model = loaded_model
-# # fit model
-# model.compile(optimizer=SGD(lr=0.0001, momentum=0.5, nesterov=True), loss='mean_squared_error')
-# model.fit(Xt, Yt, epochs=250)
 
 # # Saving model
 #
@@ -459,20 +456,20 @@ Ytrajetoria = []
 
 
 # A posição inicial do robo eh conhecida, entao passamos apenas ela para o sistema.
-Ytrajetoria.append(Yt_1[0])
+Ytrajetoria.append(Yt_1[int(Yt_1.shape[0]/2)])
 # Iterando sobre cada SAMPLE.
-for i in range(Xt.shape[0]):
+for i in range(int(Xt.shape[0]/2)):
     print("Executando iteração:", i)
     # Iterando sobre cada STEP
     for j in range(Xt.shape[1]):
         # Iterando sobre cada SAIDA
         for k in range(Yt.shape[1]):
-            Xt_1[i][j][k] = Ytrajetoria[i][k]
+            Xt_1[i + int(Xt.shape[0]/2)][j][k] = Ytrajetoria[i][k]
     # Depois de preencher cada sample por completo, faz o 'predict' dela.
-    Ytrajetoria.append(model.predict([Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i].reshape(1, Xt.shape[1], Xt.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i].reshape(1, Xt_1.shape[1], Xt_1.shape[2]).reshape(1, Xt_1.shape[1], Xt_1.shape[2])], verbose=1)[0][0])
+    Ytrajetoria.append(model.predict([Xt[i + int(Xt.shape[0]/2)].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i + int(Xt.shape[0]/2)].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i + int(Xt.shape[0]/2)].reshape(1, Xt.shape[1], Xt.shape[2]), Xt[i + int(Xt.shape[0]/2)].reshape(1, Xt.shape[1], Xt.shape[2]), Xt_1[i + int(Xt.shape[0]/2)].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i + int(Xt.shape[0]/2)].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i + int(Xt.shape[0]/2)].reshape(1, Xt_1.shape[1], Xt_1.shape[2]), Xt_1[i + int(Xt.shape[0]/2)].reshape(1, Xt_1.shape[1], Xt_1.shape[2]).reshape(1, Xt_1.shape[1], Xt_1.shape[2])], verbose=1)[0][0])
 
 # plt.plot(timestampList[31:], [i[0] for i in Yt], timestampList[31:], [i[0] for i in Ycalc[0]])
-plt.plot(timestampList[31:], [i[0] for i in Yt], timestampList[31:], [i[0] for i in Ytrajetoria[:-1]])
+plt.plot(timestampList[int(n_steps/2):int(len(timestampList - n_steps - 1)/2)], [i[0] for i in Yt[int(len(Yt)/2):]], timestampList[int(n_steps/2):int(len(timestampList - n_steps - 1)/2)], [i[0] for i in Ytrajetoria[:]])
 plt.show()
 
 # # demonstrate prediction
