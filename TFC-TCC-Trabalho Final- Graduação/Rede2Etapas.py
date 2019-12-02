@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
@@ -287,6 +288,9 @@ for i, j in zip(timestampList[0:100], timestampListGroundTruth[0:100]):
 print(max((i - j).min(), (i - j).max(), key=abs))
 
 # ===============================================================================
+# Salvando valores de referencia que serao uteis na hora de imprimir nos graficos.
+timeMax = np.max(timestampList)
+timeMin  = np.min(timestampList)
 
 # Normalizando dados antes de inserir como entrada. MUITO IMPORTANTE.
 
@@ -410,14 +414,21 @@ Xt, Yt, Xt_1, Yt_1 = split_dataset(raw_input, raw_output, steps=n_steps)
 # model.compile(optimizer="nadam", loss='mean_squared_error')
 #
 # # Print model
-# plot_model(model, to_file='2etapas.png', show_shapes=True)
+# plot_model(model, to_file='model2etapas.png', show_shapes=True, dpi=150)
 #
 # # Xfinal = repeteMatrizDataset(Xt, Xt_1, 4)
 #
 # # fit model
-# model.fit([Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)]], [Yt[1:int(len(Xt)/2)], Yt_1[1:int(len(Xt)/2)]], epochs=5)
-
-#==================================================================================
+# history = model.fit([Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)], Xt_1[1:int(len(Xt)/2)]], [Yt[1:int(len(Xt)/2)], Yt_1[1:int(len(Xt)/2)]], epochs=5)
+# history = model.fit([Xt, Xt, Xt, Xt, Xt_1, Xt_1, Xt_1, Xt_1], [Yt, Yt_1], validation_split=0.1, epochs=10)
+# plt.plot(history.history['loss'])
+# plt.plot(history.history['val_loss'])
+# plt.title('Model loss')
+# plt.ylabel('Loss')
+# plt.xlabel('Epoch')
+# plt.legend(['Train', 'Test'], loc='upper left')
+# plt.show()
+#===============================================================================
 
 # load json and create model
 json_file = open('model2etapas.json', 'r')
@@ -440,9 +451,11 @@ model = loaded_model
 # json_file.close()
 # model.save_weights("model2etapas.h5")
 # print("Model saved to disk")
+#
+# # Print model
+# plot_model(model, to_file='model2etapas.png', show_shapes=True)
 
-# Print model
-plot_model(model, to_file='model2etapas.png', show_shapes=True)
+
 
 Ycalc = []
 Ytrajetoria = []
@@ -472,8 +485,33 @@ for i in range(int(Xt.shape[0]/2)):
 plt.plot(timestampList[int(n_steps/2):int(len(timestampList - n_steps - 1)/2)], [i[0] for i in Yt[int(len(Yt)/2):]], timestampList[int(n_steps/2):int(len(timestampList - n_steps - 1)/2)], [i[0] for i in Ytrajetoria[:]])
 plt.show()
 
-# # demonstrate prediction
-# x_input = np.array([70, 80, 90])
-# x_input = x_input.reshape((1, n_steps, n_features))
-# yhat = model.predict(x_input, verbose=0)
-# print(yhat)
+matriz_referencia = np.concatenate([timestampListGroundTruth.reshape(timestampListGroundTruth.shape[0], 1)[n_steps + 1:][int(len(Yt)/2):], Yt[int(len(Yt)/2):]], axis=1)
+matriz_regressao = np.concatenate([timestampListGroundTruth.reshape(timestampListGroundTruth.shape[0], 1)[n_steps + 1:][int(len(Yt)/2):], Ytrajetoria], axis=1)
+
+np.savetxt("matriz_referencia.txt", matriz_referencia)
+np.savetxt("matriz_regressao.txt", matriz_regressao)
+
+# for j in range(Yt.shape[1]):
+#     plt.plot(math.pow(10, -9)*(timestampListGroundTruth[int(len(Yt) / 2 + n_steps + 1):] - timestampListGroundTruth[int(len(Yt) / 2 + n_steps + 1)]), [i[j] for i in Yt[int(len(Yt) / 2):]], math.pow(10, -9)*(timestampListGroundTruth[int(len(Yt) / 2 + n_steps + 1):] - timestampListGroundTruth[int(len(Yt) / 2 + n_steps + 1)]), [i[j] for i in Ytrajetoria[:]])
+#     if j<3:
+#         plt.ylabel('Deslocamento [m]')
+#     elif j == 3:
+#         plt.ylabel('Quatérnio em W')
+#     elif j == 4:
+#         plt.ylabel('Quatérnio em X')
+#     elif j == 5:
+#         plt.ylabel('Quatérnio em Y')
+#     elif j == 6:
+#         plt.ylabel('Quatérnio em Z')
+#     plt.xlabel('Tempo [s]')
+#     plt.legend(['Referência', 'Regressão'], loc='upper left')
+#     plt.savefig("Figuras-Latex/saida" + str(j) + ".png")
+#     plt.show()
+#
+# plt.plot([i[1] for i in Yt[int(len(Yt)/2):-1000]], [i[0] for i in Yt[int(len(Yt)/2):-1000]])
+# plt.plot([i[1] for i in Ytrajetoria[:-1000]], [i[0] for i in Ytrajetoria[:-1000]])
+# plt.ylabel('Eixo Y [m]')
+# plt.xlabel('Eixo X [m]')
+# plt.legend(['Referência', 'Regressão'], loc='upper left')
+# plt.savefig("Figuras-Latex/XvsY" + ".png")
+# plt.show()
