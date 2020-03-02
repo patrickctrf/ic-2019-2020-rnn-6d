@@ -323,7 +323,7 @@ Xt, Yt, Xt_1, Yt_1 = split_dataset(raw_input, raw_output, steps=n_steps)
 # neuroniosCamada2 = 50
 # neuroniosCamada3 = 50
 # neuroniosCamada4 = 50
-#
+# 
 # input4 = Input(shape=(Xt_1.shape[1], Xt_1.shape[2]))
 # output4 = TimeDistributed(Dense(neuroniosCamada1, activation="tanh"), input_shape=(Xt_1.shape[1], Xt_1.shape[2]))(
 #     input4)
