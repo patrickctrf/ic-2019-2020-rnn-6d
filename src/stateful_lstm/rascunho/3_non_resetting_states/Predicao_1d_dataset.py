@@ -9,10 +9,17 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
 from math import sqrt
-import matplotlib
+import matplotlib.pyplot as plt
 import numpy
 from numpy import concatenate
-import matplotlib.pyplot as plt
+
+
+def fake_position(x):
+    return 3 * x ** 3 + 14 * x ** 2 + 2 * x + 9
+
+
+def fake_acceleration(x):
+    return 18 * x + 28
 
 
 # date-time parsing function for loading the dataset
@@ -75,7 +82,7 @@ def fit_lstm(train, batch_size, nb_epoch, neurons):
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
     for i in range(nb_epoch):
-        model.fit(X, y, epochs=1, batch_size=batch_size, verbose=0, shuffle=False)
+        model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False)
         model.reset_states()
     return model
 
@@ -88,15 +95,18 @@ def forecast_lstm(model, batch_size, X):
 
 
 # run a repeated experiment
-def experiment(repeats, series):
+def experiment(repeats):
     # transform data to be stationary
-    raw_values = series.values
-    diff_values = difference(raw_values, 1)
-    # transform data to be supervised learning
-    supervised = timeseries_to_supervised(diff_values, 1)
-    supervised_values = supervised.values[1:, :]
+    raw_pos = [fake_position(i / 100) for i in range(-100, 300)]
+    diff_pos = difference(raw_pos, 1)
+    diff_pos = numpy.array(diff_pos)
+    raw_accel = [fake_acceleration(i/100) for i in range(-100, 300)]
+    diff_accel = difference(raw_accel, 1)
+    diff_accel = numpy.array(diff_accel)
+
+    supervised_values = numpy.transpose(numpy.vstack((diff_pos, diff_accel)))
     # split data into train and test-sets
-    train, test = supervised_values[0:-12, :], supervised_values[-12:, :]
+    train, test = supervised_values[0:int(len(diff_pos)*2/3), :], supervised_values[int(-len(diff_pos)*1/3):, :]
     # transform the scale of the data
     scaler, train_scaled, test_scaled = scale(train, test)
     # run experiment
@@ -113,33 +123,17 @@ def experiment(repeats, series):
             # invert scaling
             yhat = invert_scale(scaler, X, yhat)
             # invert differencing
-            # Ele soma aos valores crus pq o LSTM foi treinado para prever a diferenca deste mes em relacao ao mes anterior (que eh a ENTRADA do lstm). Lembre-se que
-            yhat = inverse_difference(raw_values, yhat, len(test_scaled) + 1 - i)
+            yhat = inverse_difference(raw_pos, yhat, len(test_scaled) + 1 - i)
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.plot(range(len(predictions)), predictions, range(len(raw_values[-12:])), raw_values[-12:])
+        plt.plot(range(len(predictions)), predictions, range(len(raw_pos[int(-len(raw_pos)*1/3):])), raw_pos[int(-len(raw_pos)*1/3):])
         plt.show()
-        rmse = sqrt(mean_squared_error(raw_values[-12:], predictions))
+        rmse = sqrt(mean_squared_error(raw_pos[int(-len(raw_pos)*1/3):], predictions))
         print('%d) Test RMSE: %.3f' % (r + 1, rmse))
         error_scores.append(rmse)
     return error_scores
 
 
-# execute the experiment
-def run():
-    # load dataset
-    series = read_csv('shampoo-sales.csv', header=0, parse_dates=[0], index_col=0, squeeze=True, date_parser=parser)
-    # experiment
-    repeats = 1
-    results = DataFrame()
-    # run experiment
-    results['results'] = experiment(repeats, series)
-    # summarize results
-    print(results.describe())
-    # save results
-    results.to_csv('experiment_stateful.csv', index=False)
-
-
 # entry point
-run()
+experiment(1)
