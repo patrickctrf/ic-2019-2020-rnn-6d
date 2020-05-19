@@ -14,6 +14,14 @@ import numpy
 from numpy import concatenate
 
 
+def fake_position(x):
+    return 3 * x ** 3 + 14 * x ** 2 + 2 * x + 9
+
+
+def fake_acceleration(x):
+    return 18 * x + 28
+
+
 # date-time parsing function for loading the dataset
 def parser(x):
     return datetime.strptime('190' + x, '%Y-%m')
@@ -74,7 +82,7 @@ def fit_lstm(train, batch_size, nb_epoch, neurons):
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
     for i in range(nb_epoch):
-        model.fit(X, y, epochs=1, batch_size=batch_size, verbose=0, shuffle=False)
+        model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False)
         model.reset_states()
     return model
 
@@ -88,15 +96,17 @@ def forecast_lstm(model, batch_size, X):
 
 # run a repeated experiment
 def experiment(repeats):
-
     # transform data to be stationary
-    raw_values = [0, 4, 9, 10, 15, 18, 24, 25, 27, 28, 33, 33, 42, 44, 52, 61, 71, 80, 90, 93, 100, 105, 114, 117, 121, 129, 134, 141, 150, 154, 163, 171, 172, 174, 176, 177]
-    diff_values = difference(raw_values, 1)
-    # transform data to be supervised learning
-    supervised = timeseries_to_supervised(diff_values, 1)
-    supervised_values = supervised.values[1:, :]
+    raw_pos = [fake_position(i / 100) for i in range(-100, 300)]
+    diff_pos = difference(raw_pos, 1)
+    diff_pos = numpy.array(diff_pos)
+    raw_accel = [fake_acceleration(i/100) for i in range(-100, 300)]
+    diff_accel = difference(raw_accel, 1)
+    diff_accel = numpy.array(diff_accel)
+
+    supervised_values = numpy.transpose(numpy.vstack((diff_pos, diff_accel)))
     # split data into train and test-sets
-    train, test = supervised_values[0:-12, :], supervised_values[-12:, :]
+    train, test = supervised_values[0:int(len(diff_pos)*2/3), :], supervised_values[int(-len(diff_pos)*1/3):, :]
     # transform the scale of the data
     scaler, train_scaled, test_scaled = scale(train, test)
     # run experiment
@@ -113,13 +123,13 @@ def experiment(repeats):
             # invert scaling
             yhat = invert_scale(scaler, X, yhat)
             # invert differencing
-            yhat = inverse_difference(raw_values, yhat, len(test_scaled) + 1 - i)
+            yhat = inverse_difference(raw_pos, yhat, len(test_scaled) + 1 - i)
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.plot(range(len(predictions)), predictions, range(len(raw_values[-12:])), raw_values[-12:])
+        plt.plot(range(len(predictions)), predictions, range(len(raw_pos[int(-len(raw_pos)*1/3):])), raw_pos[int(-len(raw_pos)*1/3):])
         plt.show()
-        rmse = sqrt(mean_squared_error(raw_values[-12:], predictions))
+        rmse = sqrt(mean_squared_error(raw_pos[int(-len(raw_pos)*1/3):], predictions))
         print('%d) Test RMSE: %.3f' % (r + 1, rmse))
         error_scores.append(rmse)
     return error_scores
