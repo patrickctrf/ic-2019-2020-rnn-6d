@@ -12,6 +12,7 @@ from math import sqrt
 import matplotlib
 import numpy
 from numpy import concatenate
+import matplotlib.pyplot as plt
 
 
 # date-time parsing function for loading the dataset
@@ -112,10 +113,13 @@ def experiment(repeats, series):
             # invert scaling
             yhat = invert_scale(scaler, X, yhat)
             # invert differencing
+            # Ele soma aos valores crus pq o LSTM foi treinado para prever a diferenca deste mes em relacao ao mes anterior (que eh a ENTRADA do lstm). Lembre-se que
             yhat = inverse_difference(raw_values, yhat, len(test_scaled) + 1 - i)
             # store forecast
             predictions.append(yhat)
         # report performance
+        plt.plot(range(len(predictions)), predictions, range(len(raw_values[-12:])), raw_values[-12:])
+        plt.show()
         rmse = sqrt(mean_squared_error(raw_values[-12:], predictions))
         print('%d) Test RMSE: %.3f' % (r + 1, rmse))
         error_scores.append(rmse)
@@ -127,7 +131,7 @@ def run():
     # load dataset
     series = read_csv('shampoo-sales.csv', header=0, parse_dates=[0], index_col=0, squeeze=True, date_parser=parser)
     # experiment
-    repeats = 10
+    repeats = 1
     results = DataFrame()
     # run experiment
     results['results'] = experiment(repeats, series)
