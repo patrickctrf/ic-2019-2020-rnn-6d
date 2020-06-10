@@ -1,3 +1,4 @@
+from keras.callbacks import TensorBoard
 from keras.engine.saving import model_from_json
 from pandas import DataFrame
 from pandas import Series
@@ -18,11 +19,11 @@ from tqdm import tqdm
 
 
 def fake_position(x):
-    return 4 * x ** 4 + 3 * x ** 3 + 14 * x ** 2 + 2 * x + 9
+    return 1 * x ** 5 + 4 * x ** 4 + 3 * x ** 3 + 14 * x ** 2 + 2 * x - 3
 
 
 def fake_acceleration(x):
-    return 48 * x ** 2 + 18 * x + 28
+    return 20 * x ** 3 + 48 * x ** 2 + 18 * x + 28
 
 
 # # date-time parsing function for loading the dataset
@@ -122,7 +123,7 @@ inverse scale (yhat) too.
 
 
 # fit an LSTM network to training data
-def fit_lstm(train, batch_size, nb_epoch, neurons, time_steps=1, model_file_name="model"):
+def fit_lstm(train, batch_size, nb_epoch, neurons, time_steps=1, model_file_name="model", validation_data=None):
     """
 This function assembles your network and train it with provided data (train).
 It returns your fitted model.
@@ -133,13 +134,18 @@ It returns your fitted model.
     :param neurons: How many neurons in the LSTM cell.
     :param time_steps: For a stateful LSTM, usually we have 1 time step and it's hard to think in an alternative case, so we leave it optional.
     :param model_file_name: File name to save model after training.
+    :param validation_data: Same pattern that training data, but the portion of validation to check overfitting, etc.
     :return: Your trained model.
     """
     X, y = train[:, 0:-1], train[:, -1]
 
+    X_validation, y_validation = validation_data[:, 0:-1], validation_data[:, -1]
+
     # (Samples, Time STEPS, Fetures)
     # Ex: 266 amostras com 1 time step (NAO tem a ver com online training) e 1 feature (1 entrada)
     X = X.reshape(X.shape[0], time_steps, X.shape[1])
+
+    X_validation = X_validation.reshape(X_validation.shape[0], time_steps, X_validation.shape[1])
     model = Sequential()
     # A quantidade de amostras (ex: 266) nao eh levada em conta aqui, o que
     # importa eh o shape de entrada, por isso nao usa X.shape[0].
@@ -148,15 +154,24 @@ It returns your fitted model.
     # que eh o tamanho do batch
     model.add(LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    model.compile(loss='mean_squared_error', optimizer='nadam')
+
+    keras_callback = TensorBoard(log_dir="./logs",
+                                 histogram_freq=1,
+                                 batch_size=batch_size,
+                                 write_grads=True,
+                                 write_graph=True,
+                                 write_images=True,
+                                 update_freq="epoch",
+                                 embeddings_freq=0,
+                                 embeddings_metadata=None)
+
     for i in tqdm(range(nb_epoch)):
         # I believe we need to train each epoch and then reset states, beacause
         # this is a stateful lstm, and it would "remember" previous inputs if we
         # didn't reset it.
-        model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False)
+        training_history = model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=[keras_callback])
         model.reset_states()
-
-        print("Epoch: ", i + 1)
 
     # serialize model to JSON
     model_json = model.to_json()
@@ -164,7 +179,7 @@ It returns your fitted model.
         json_file.write(model_json)
     # serialize weights to HDF5
     model.save_weights(model_file_name + ".h5")
-    return model
+    return model, training_history
 
 
 # make a one-step forecast
@@ -193,7 +208,7 @@ def experiment(repeats):
     raw_pos = [fake_position(i / 100) for i in range(-100, 300)]
     diff_pos = difference(raw_pos, 1)
     diff_pos = numpy.array(raw_pos)
-    raw_accel = [fake_acceleration(i/100) for i in range(-100, 300)]
+    raw_accel = [fake_acceleration(i / 100) for i in range(-100, 300)]
     diff_accel = difference(raw_accel, 1)
     diff_accel = numpy.array(raw_accel)
 
@@ -203,21 +218,21 @@ def experiment(repeats):
 
     supervised_values = numpy.transpose(numpy.vstack((diff_timestamp, diff_accel, diff_pos)))
     # split data into train and test-sets
-    train, test = supervised_values[0:int(len(diff_pos)*2/3), :], supervised_values[int(-len(diff_pos)*1/3):, :]
+    train, test = supervised_values[0:int(len(diff_pos) * 2 / 3), :], supervised_values[int(-len(diff_pos) * 1 / 3):, :]
     # transform the scale of the data
     scaler, train_scaled, test_scaled = scale(train, test)
     # run experiment
     error_scores = list()
     for r in range(repeats):
         # fit the base model
-        # lstm_model = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=1000, neurons=10)
+        # lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=1000, neurons=10, validation_data=test_scaled)
         lstm_model = load_model()
         # forecast test dataset
         predictions = list()
-        for i in range(len(test_scaled)):
+        for i in range(len(train_scaled)):
             # predict
             # X, y = (np.random.rand(133, 3) * 2 - 1)[i, 0:-1], test_scaled[i, -1]
-            X, y = test_scaled[i, 0:-1], test_scaled[i, -1]
+            X, y = train_scaled[i, 0:-1], train_scaled[i, -1]
             yhat = forecast_lstm(lstm_model, 1, X)
             # invert scaling
             yhat = invert_scale(scaler, X, yhat)
@@ -226,9 +241,9 @@ def experiment(repeats):
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.plot(range(len(predictions)), predictions, range(len(raw_pos[int(-len(raw_pos)*1/3):])), raw_pos[int(-len(raw_pos)*1/3):])
+        plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
         plt.show()
-        rmse = sqrt(mean_squared_error(raw_pos[int(-len(raw_pos)*1/3):], predictions))
+        rmse = sqrt(mean_squared_error(raw_pos[:len(train_scaled)], predictions))
         print('%d) Test RMSE: %.3f' % (r + 1, rmse))
         error_scores.append(rmse)
     return error_scores
