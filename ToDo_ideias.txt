@@ -1,0 +1,8 @@
+LSTM em paralelo marcando t-1
+
+Falar que as rede têm dificuldade em aproximar zona de explosão da função (citar exemplo 1d e algum artigo que fale sobre isso)
+Colocar gráficos de como a rede se comporta em casos como esse.
+
+Verificar se a rede vai conseguir interpolar as variações abruptas dos ângulos e pensar em algum tipo de escala para isso.
+
+Testar com uma função mais simples e ondulante, tipo sen(x) * x e depois com algo descontínuo, tipo funcao tangente e ver como a rede se comporta. Pode usar a funcao sync!
