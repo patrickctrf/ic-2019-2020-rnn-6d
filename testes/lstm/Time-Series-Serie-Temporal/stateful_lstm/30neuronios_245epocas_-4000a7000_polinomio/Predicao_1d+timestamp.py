@@ -1,7 +1,4 @@
-import os
 import pickle
-import shutil
-
 from keras.callbacks import TensorBoard
 from keras.engine.saving import model_from_json
 from pandas import DataFrame
@@ -14,7 +11,7 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
-from math import sqrt, sin, cos
+from math import sqrt
 import matplotlib.pyplot as plt
 import numpy
 from numpy import concatenate, array
@@ -27,36 +24,28 @@ def fake_position(x):
 Generate a simulated one dimensional position for training on "1d dataset" an
 test if the neural network is able to generalize well.
 
-Given "x" values, calculate f(x) for this.
+Given "x" values, calculate N-degree polynomial for this.
 
 It is supposed to be the output for the neural network.
 
     :param x: Array of values to calculate f(x) = y.
     :return: Array os respective position in "y" axis.
     """
-
-    if x == 0:
-        return 1
-
-    return sin(x) / x
+    return 1 * x ** 5 + 4 * x ** 4 + 3 * x ** 3 + 14 * x ** 2 + 2 * x - 3
 
 
 def fake_acceleration(x):
     """
 Generate a simulated one dimensional acceleration for training on "1d dataset" an test if the neural network is able to generalize well.
 
-Given "x" values, calculate f''(x) for this.
+Given "x" values, calculate N-degree polynomial for this.
 
 It is supposed to be the input for the neural network.
 
     :param x: Array of values to calculate f''(x) = y''.
     :return: Array os respective acceleration in "y" axis.
     """
-
-    if x == 0:
-        return -1 / 3
-
-    return -((x ** 2 - 2) * sin(x) + 2 * x * cos(x)) / x ** 3
+    return 20 * x ** 3 + 48 * x ** 2 + 18 * x + 28
 
 
 # create a differenced series
@@ -149,34 +138,6 @@ inverse scale (yhat) too.
     return inverted[0, -1]
 
 
-def tensorboard_callback(batch_size, log_dir="./logs"):
-    """
-Utility function to generate tensorboard callback, deal with directory needs and keep the code clean.
-
-    :param batch_size: batch size in training data (needed for compatibility).
-    :param log_dir: Where to save the logs files.
-    :return: tesnorboard_callback for keras callbacks.
-    """
-    # We need to exclude previous tensorboard logs, or it is gone produce errors
-    # when trying to visualize it.
-    try:
-        shutil.rmtree("./logs")
-    except OSError as e:
-        print("Error: %s : %s" % ("./logs", e.strerror))
-
-    keras_callback = TensorBoard(log_dir="./logs",
-                                 histogram_freq=1,
-                                 batch_size=batch_size,
-                                 write_grads=True,
-                                 write_graph=True,
-                                 write_images=True,
-                                 update_freq="epoch",
-                                 embeddings_freq=0,
-                                 embeddings_metadata=None)
-
-    return keras_callback
-
-
 # fit an LSTM network to training data
 def fit_lstm(train, batch_size, nb_epoch, neurons, time_steps=1, model_file_name="model", validation_data=None):
     """
@@ -211,7 +172,15 @@ It returns your fitted model.
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='nadam')
 
-    keras_callback = tensorboard_callback(batch_size, log_dir="./logs")
+    keras_callback = TensorBoard(log_dir="./logs",
+                                 histogram_freq=1,
+                                 batch_size=batch_size,
+                                 write_grads=True,
+                                 write_graph=True,
+                                 write_images=True,
+                                 update_freq="epoch",
+                                 embeddings_freq=0,
+                                 embeddings_metadata=None)
 
     for i in tqdm(range(1)):
         # I believe we need to train each epoch and then reset states, beacause
@@ -278,16 +247,6 @@ Warning: Overwrites previous history if the same name is given.
     with open(training_history_file_path, "wb") as history_file:
         training_history = pickle.dump(history, history_file)
 
-    # summarize history for loss and save it to file
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig("val_loss.png", dpi=800)
-    plt.show()
-
     return
 
 
@@ -314,10 +273,10 @@ Runs the experiment itself.
     :return: Error scores for each repeat.
     """
     # transform data to be stationary
-    raw_pos = [fake_position(i / 100) for i in range(-800, 800)]
+    raw_pos = [fake_position(i / 100) for i in range(-4000, 7000)]
     diff_pos = difference(raw_pos, 1)
     diff_pos = numpy.array(raw_pos)
-    raw_accel = [fake_acceleration(i / 100) for i in range(-800, 800)]
+    raw_accel = [fake_acceleration(i / 100) for i in range(-4000, 7000)]
     diff_accel = difference(raw_accel, 1)
     diff_accel = numpy.array(raw_accel)
 
@@ -334,8 +293,7 @@ Runs the experiment itself.
     error_scores = list()
     for r in range(repeats):
         # fit the base model
-        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=2, neurons=30, validation_data=test_scaled);
-        save_training_history(history=training_history, training_history_file_path="training_history_serialized")
+        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=245, neurons=30, validation_data=test_scaled); save_training_history(history=training_history, training_history_file_path="training_history_serialized")
         # lstm_model = load_model()
         # forecast test dataset
         predictions = list()
@@ -352,7 +310,6 @@ Runs the experiment itself.
             predictions.append(yhat)
         # report performance
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
-        plt.savefig("output_train.png", dpi=800)
         plt.show()
         rmse = sqrt(mean_squared_error(raw_pos[:len(train_scaled)], predictions))
         print('%d) Test RMSE: %.3f' % (r + 1, rmse))
@@ -372,7 +329,6 @@ Runs the experiment itself.
             predictions.append(yhat)
         # report performance
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[-len(test_scaled):])), raw_pos[-len(test_scaled):])
-        plt.savefig("output_test.png", dpi=800)
         plt.show()
         rmse = sqrt(mean_squared_error(raw_pos[-len(test_scaled):], predictions))
         print('%d) Test RMSE: %.3f' % (r + 1, rmse))
