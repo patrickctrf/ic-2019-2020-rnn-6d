@@ -237,22 +237,21 @@ It returns your fitted model.
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='nadam')
 
-    # Saving model structure to file
+    keras_callbacks = tensorboard_and_callbacks(batch_size, log_dir="./logs")
+
+    for i in tqdm(range(1)):
+        # I believe we need to train each epoch and then reset states, beacause
+        # this is a stateful lstm, and it would "remember" previous inputs if we
+        # didn't reset it.
+        training_history = model.fit(X, y, epochs=nb_epoch, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=keras_callbacks)
+        model.reset_states()
+
+    # Saving model to file
     # serialize model to JSON
     model_json = model.to_json()
     with open(model_file_name + ".json", "w") as json_file:
         json_file.write(model_json)
-
-    keras_callbacks = tensorboard_and_callbacks(batch_size, log_dir="./logs")
-
-    for i in tqdm(range(nb_epoch)):
-        # I believe we need to train each epoch and then reset states, beacause
-        # this is a stateful lstm, and it would "remember" previous inputs if we
-        # didn't reset it.
-        training_history = model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=keras_callbacks)
-        model.reset_states()
-
-    # serialize (and save) WEIGHTS to HDF5 (equals to ".h5" file format)
+    # serialize weights to HDF5 (equals to ".h5" file format)
     model.save_weights(model_file_name + ".hdf5")
 
     return model, training_history
@@ -317,7 +316,7 @@ Warning: Overwrites previous history if the same name is given.
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
     plt.savefig("val_loss.png", dpi=800)
-    # plt.show()
+    plt.show()
 
     return
 
@@ -345,10 +344,10 @@ Runs the experiment itself.
     :return: Error scores for each repeat.
     """
     # transform data to be stationary
-    raw_pos = [fake_position(i / 10) for i in range(-30000, 30000)]
+    raw_pos = [fake_position(i / 100) for i in range(-3000, 3000)]
     diff_pos = difference(raw_pos, 1)
     diff_pos = numpy.array(raw_pos)
-    raw_accel = [fake_acceleration(i / 100) for i in range(-30000, 30000)]
+    raw_accel = [fake_acceleration(i / 100) for i in range(-3000, 3000)]
     diff_accel = difference(raw_accel, 1)
     diff_accel = numpy.array(raw_accel)
 
@@ -365,8 +364,8 @@ Runs the experiment itself.
     error_scores = list()
     for r in range(repeats):
         # fit the base model
-        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=500, neurons=20, validation_data=test_scaled); save_training_history(history=training_history, training_history_file_path="training_history_serialized")
-        # lstm_model = load_model()
+        # lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=1000, neurons=3, validation_data=test_scaled); save_training_history(history=training_history, training_history_file_path="training_history_serialized")
+        lstm_model = load_model()
         # forecast test dataset
         predictions = list()
         for i in range(len(train_scaled)):
@@ -381,10 +380,9 @@ Runs the experiment itself.
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.close()
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
-        plt.savefig("output_train.png", dpi=800)
-        # plt.show()
+        plt.savefig("output_train.png", dpi=2000)
+        plt.show()
         rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
         print('%d) Test MSE: %.6f' % (r + 1, rmse))
         error_scores.append(rmse)
@@ -404,10 +402,9 @@ Runs the experiment itself.
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.close()
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[-len(test_scaled):])), raw_pos[-len(test_scaled):])
         plt.savefig("output_test.png", dpi=800)
-        # plt.show()
+        plt.show()
         rmse = mean_squared_error(raw_pos[-len(test_scaled):], predictions)
         print('%d) Test MSE: %.6f' % (r + 1, rmse))
         error_scores.append(rmse)

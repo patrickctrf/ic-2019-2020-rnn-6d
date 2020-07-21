@@ -1,9 +1,4 @@
-import glob
-import os
-import pickle
-import shutil
-
-from keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger, ProgbarLogger
+from keras.callbacks import TensorBoard
 from keras.engine.saving import model_from_json
 from pandas import DataFrame
 from pandas import Series
@@ -15,7 +10,7 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
-from math import sqrt, sin, cos
+from math import sqrt
 import matplotlib.pyplot as plt
 import numpy
 from numpy import concatenate, array
@@ -24,53 +19,30 @@ from tqdm import tqdm
 
 
 def fake_position(x):
-    """
-Generate a simulated one dimensional position for training on "1d dataset" an
-test if the neural network is able to generalize well.
-
-Given "x" values, calculate f(x) for this.
-
-It is supposed to be the output for the neural network.
-
-    :param x: Array of values to calculate f(x) = y.
-    :return: Array os respective position in "y" axis.
-    """
-
-    if x == 0:
-        return 1
-
-    return sin(x) / x
+    return 1 * x ** 5 + 4 * x ** 4 + 3 * x ** 3 + 14 * x ** 2 + 2 * x - 3
 
 
 def fake_acceleration(x):
-    """
-Generate a simulated one dimensional acceleration for training on "1d dataset" an test if the neural network is able to generalize well.
+    return 20 * x ** 3 + 48 * x ** 2 + 18 * x + 28
 
-Given "x" values, calculate f''(x) for this.
 
-It is supposed to be the input for the neural network.
-
-    :param x: Array of values to calculate f''(x) = y''.
-    :return: Array os respective acceleration in "y" axis.
-    """
-
-    if x == 0:
-        return -1 / 3
-
-    return -((x ** 2 - 2) * sin(x) + 2 * x * cos(x)) / x ** 3
+# # date-time parsing function for loading the dataset
+# def parser(x):
+#     return datetime.strptime('190' + x, '%Y-%m')
+#
+#
+# # frame a sequence as a supervised learning problem
+# def timeseries_to_supervised(data, lag=1):
+#     df = DataFrame(data)
+#     columns = [df.shift(i) for i in range(1, lag + 1)]
+#     columns.append(df)
+#     df = concat(columns, axis=1)
+#     return df
 
 
 # create a differenced series
 
 def difference(dataset, interval=1):
-    """
-For a given dataset, calculates the difference between each sample and the
-previous one, for both input and output values.
-
-    :param dataset: Dataset to difference from.
-    :param interval: Which sample to compare (usually 1).
-    :return: New dataset composed of differences.
-    """
     diff = list()
     for i in range(interval, len(dataset)):
         value = dataset[i] - dataset[i - interval]
@@ -150,59 +122,6 @@ inverse scale (yhat) too.
     return inverted[0, -1]
 
 
-def tensorboard_and_callbacks(batch_size, log_dir="./logs", model_checkpoint_file="best_weights.{val_loss:.4f}-{epoch:05d}.hdf5", csv_file_path="loss_log.csv"):
-    """
-Utility function to generate tensorboard and others callback, deal with directory needs and keep the code clean.
-
-    :param batch_size: batch size in training data (needed for compatibility).
-    :param log_dir: Where to save the logs files.
-    :param model_checkpoint_file: File to save weights that resulted best (smallest) validation loss.
-    :param csv_file_path: CSV file path to save loss and validation loss values along the training process.
-    :return: tesnorboard_callback for keras callbacks.
-    """
-    # We need to exclude previous tensorboard and callbacks logs, or it is gone
-    # produce errors when trying to visualize it.
-    try:
-        shutil.rmtree(log_dir)
-    except OSError as e:
-        print("Error: %s : %s" % (log_dir, e.strerror))
-
-    try:
-        # Get a list of all the file paths with first 8 letters from model_checkpoint_file.
-        file_list = glob.glob(model_checkpoint_file[:8] + "*")
-
-        # Iterate over the list of filepaths & remove each file.
-        for file_path in file_list:
-            os.remove(file_path)
-    except OSError as e:
-        print("Error: %s : %s" % (model_checkpoint_file, e.strerror))
-
-    try:
-        os.remove(csv_file_path)
-    except OSError as e:
-        print("Error: %s : %s" % (csv_file_path, e.strerror))
-
-    tensorboard_callback = TensorBoard(log_dir=log_dir,
-                                       histogram_freq=1,
-                                       batch_size=batch_size,
-                                       write_grads=True,
-                                       write_graph=True,
-                                       write_images=True,
-                                       update_freq="epoch",
-                                       embeddings_freq=0,
-                                       embeddings_metadata=None)
-
-    model_checkpoint_callback = ModelCheckpoint(filepath=model_checkpoint_file,
-                                                save_weights_only=True,
-                                                monitor='val_loss',
-                                                mode='min',
-                                                save_best_only=True)
-
-    csv_logger_callback = CSVLogger(csv_file_path, separator=",", append=True)
-
-    return [tensorboard_callback, model_checkpoint_callback, csv_logger_callback]
-
-
 # fit an LSTM network to training data
 def fit_lstm(train, batch_size, nb_epoch, neurons, time_steps=1, model_file_name="model", validation_data=None):
     """
@@ -237,118 +156,59 @@ It returns your fitted model.
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='nadam')
 
-    # Saving model structure to file
+    keras_callback = TensorBoard(log_dir="./logs",
+                                 histogram_freq=1,
+                                 batch_size=batch_size,
+                                 write_grads=True,
+                                 write_graph=True,
+                                 write_images=True,
+                                 update_freq="epoch",
+                                 embeddings_freq=0,
+                                 embeddings_metadata=None)
+
+    for i in tqdm(range(1)):
+        # I believe we need to train each epoch and then reset states, beacause
+        # this is a stateful lstm, and it would "remember" previous inputs if we
+        # didn't reset it.
+        training_history = model.fit(X, y, epochs=nb_epoch, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=[keras_callback])
+        model.reset_states()
+
     # serialize model to JSON
     model_json = model.to_json()
     with open(model_file_name + ".json", "w") as json_file:
         json_file.write(model_json)
-
-    keras_callbacks = tensorboard_and_callbacks(batch_size, log_dir="./logs")
-
-    for i in tqdm(range(nb_epoch)):
-        # I believe we need to train each epoch and then reset states, beacause
-        # this is a stateful lstm, and it would "remember" previous inputs if we
-        # didn't reset it.
-        training_history = model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=keras_callbacks)
-        model.reset_states()
-
-    # serialize (and save) WEIGHTS to HDF5 (equals to ".h5" file format)
-    model.save_weights(model_file_name + ".hdf5")
-
+    # serialize weights to HDF5
+    model.save_weights(model_file_name + ".h5")
     return model, training_history
 
 
 # make a one-step forecast
 def forecast_lstm(model, batch_size, X):
-    """
-Performs a one-step prediction for a given LSTM model.
-
-    :param model: Trained model that forecasts the data.
-    :param batch_size: Batch size used (usually 1).
-    :param X: Input data (single sample).
-    :return: Single step prediction.
-    """
     X = X.reshape(1, 1, len(X))
     yhat = model.predict(X, batch_size=batch_size)
     return yhat[0, 0]
 
 
 def load_model(file_name="model"):
-    """
-Retrives a Keras model from a file.
-
-    :param file_name: Prefix for JSON (model) and h5 (weights) files.
-    :return: Model obeject from Keras.
-    """
     # load json and create model
     json_file = open(file_name + '.json', 'r')
     loaded_model_json = json_file.read()
     json_file.close()
     loaded_model = model_from_json(loaded_model_json)
-
-    # Get a list of all the file paths with first 8 letters from model_checkpoint_file.
-    file_list = glob.glob("best_wei*")
-
     # load weights into new model
-    loaded_model.load_weights(file_list[2])
+    loaded_model.load_weights(file_name + '.h5')
     print("Loaded model from disk")
 
     return loaded_model
 
 
-def save_training_history(history, training_history_file_path="training_history_serialized"):
-    """
-Serialize a history object (generated with Keras model.fit()) and saves it into
-a binary file for later retrieval.
-
-Warning: Overwrites previous history if the same name is given.
-
-    :param history: Training history object generated with Keras model.fit().
-    :param training_history_file_path: File where history object is going to be serialized.
-    """
-    with open(training_history_file_path, "wb") as history_file:
-        training_history = pickle.dump(history, history_file)
-
-    # summarize history for loss and save it to file
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig("val_loss.png", dpi=800)
-    # plt.show()
-
-    return
-
-
-def load_training_history(training_history_file_path="training_history_serialized"):
-    """
-Retrieves a file containing training history, unserialize it and returns the
-history object (generated with model.fit()).
-
-    :param training_history_file_path: File where history object was serialized.
-    :return: Original history object (genrated with model.fit())
-    """
-    with open(training_history_file_path, "rb") as history_file:
-        training_history = pickle.load(history_file)
-
-    return training_history
-
-
 # run a repeated experiment
 def experiment(repeats):
-    """
-Runs the experiment itself.
-
-    :param repeats: Number of times to repeat the experiment. When we are trying to create a good network, it is reccomended to use 1.
-    :return: Error scores for each repeat.
-    """
     # transform data to be stationary
-    raw_pos = [fake_position(i / 10) for i in range(-30000, 30000)]
+    raw_pos = [fake_position(i / 100) for i in range(-4000, 4000)]
     diff_pos = difference(raw_pos, 1)
     diff_pos = numpy.array(raw_pos)
-    raw_accel = [fake_acceleration(i / 100) for i in range(-30000, 30000)]
+    raw_accel = [fake_acceleration(i / 100) for i in range(-4000, 4000)]
     diff_accel = difference(raw_accel, 1)
     diff_accel = numpy.array(raw_accel)
 
@@ -365,8 +225,8 @@ Runs the experiment itself.
     error_scores = list()
     for r in range(repeats):
         # fit the base model
-        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=500, neurons=20, validation_data=test_scaled); save_training_history(history=training_history, training_history_file_path="training_history_serialized")
-        # lstm_model = load_model()
+        # lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=1000, neurons=10, validation_data=test_scaled)
+        lstm_model = load_model()
         # forecast test dataset
         predictions = list()
         for i in range(len(train_scaled)):
@@ -381,15 +241,11 @@ Runs the experiment itself.
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.close()
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
-        plt.savefig("output_train.png", dpi=800)
-        # plt.show()
-        rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
-        print('%d) Test MSE: %.6f' % (r + 1, rmse))
+        plt.show()
+        rmse = sqrt(mean_squared_error(raw_pos[:len(train_scaled)], predictions))
+        print('%d) Test RMSE: %.3f' % (r + 1, rmse))
         error_scores.append(rmse)
-
-        # lstm_model.reset_states()
 
         predictions = list()
         for i in range(len(test_scaled)):
@@ -404,17 +260,13 @@ Runs the experiment itself.
             # store forecast
             predictions.append(yhat)
         # report performance
-        plt.close()
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[-len(test_scaled):])), raw_pos[-len(test_scaled):])
-        plt.savefig("output_test.png", dpi=800)
-        # plt.show()
-        rmse = mean_squared_error(raw_pos[-len(test_scaled):], predictions)
-        print('%d) Test MSE: %.6f' % (r + 1, rmse))
+        plt.show()
+        rmse = sqrt(mean_squared_error(raw_pos[-len(test_scaled):], predictions))
+        print('%d) Test RMSE: %.3f' % (r + 1, rmse))
         error_scores.append(rmse)
-
     return error_scores
 
 
-if __name__ == '__main__':
-    # entry point
-    experiment(1)
+# entry point
+experiment(1)

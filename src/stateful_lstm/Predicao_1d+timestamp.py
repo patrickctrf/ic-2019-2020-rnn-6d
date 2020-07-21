@@ -3,6 +3,7 @@ import os
 import pickle
 import shutil
 
+from keras import Input, Model
 from keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger, ProgbarLogger
 from keras.engine.saving import model_from_json
 from pandas import DataFrame
@@ -200,7 +201,38 @@ Utility function to generate tensorboard and others callback, deal with director
 
     csv_logger_callback = CSVLogger(csv_file_path, separator=",", append=True)
 
-    return [tensorboard_callback, model_checkpoint_callback, csv_logger_callback]
+    return [model_checkpoint_callback, csv_logger_callback]
+
+
+def get_model_sequential(neurons, batch_size, X):
+    model = Sequential()
+    # A quantidade de amostras (ex: 266) nao eh levada em conta aqui, o que
+    # importa eh o shape de entrada, por isso nao usa X.shape[0].
+    # O batch_size indica quantas SAMPLES sao usadas para avaliar o gradiente
+    # DE UMA VEZ. No caso, ajustamos a rede a cada 1 sample (onilne training),
+    # que eh o tamanho do batch
+    model.add(LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
+    model.add(Dense(1))
+    model.compile(loss='mean_squared_error', optimizer='nadam')
+
+    return model
+
+
+def get_model_functional(neurons, batch_size, X):
+    input = Input(shape=(X.shape[1], X.shape[2]))
+    # A quantidade de amostras (ex: 266) nao eh levada em conta aqui, o que
+    # importa eh o shape de entrada, por isso nao usa X.shape[0].
+    # O batch_size indica quantas SAMPLES sao usadas para avaliar o gradiente
+    # DE UMA VEZ. No caso, ajustamos a rede a cada 1 sample (onilne training),
+    # que eh o tamanho do batch
+    output = LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True)(input)
+    output = Dense(1)(output)
+
+    model = Model(inputs=[input], outputs=[output])
+
+    model.compile(loss='mean_squared_error', optimizer='nadam')
+
+    return model
 
 
 # fit an LSTM network to training data
@@ -227,15 +259,8 @@ It returns your fitted model.
     X = X.reshape(X.shape[0], time_steps, X.shape[1])
 
     X_validation = X_validation.reshape(X_validation.shape[0], time_steps, X_validation.shape[1])
-    model = Sequential()
-    # A quantidade de amostras (ex: 266) nao eh levada em conta aqui, o que
-    # importa eh o shape de entrada, por isso nao usa X.shape[0].
-    # O batch_size indica quantas SAMPLES sao usadas para avaliar o gradiente
-    # DE UMA VEZ. No caso, ajustamos a rede a cada 1 sample (onilne training),
-    # que eh o tamanho do batch
-    model.add(LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
-    model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='nadam')
+
+    model = get_model_sequential(neurons=neurons, batch_size=batch_size, X=X)
 
     # Saving model structure to file
     # serialize model to JSON
@@ -365,7 +390,8 @@ Runs the experiment itself.
     error_scores = list()
     for r in range(repeats):
         # fit the base model
-        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=500, neurons=20, validation_data=test_scaled); save_training_history(history=training_history, training_history_file_path="training_history_serialized")
+        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=1, neurons=20, validation_data=test_scaled);
+        save_training_history(history=training_history, training_history_file_path="training_history_serialized")
         # lstm_model = load_model()
         # forecast test dataset
         predictions = list()
