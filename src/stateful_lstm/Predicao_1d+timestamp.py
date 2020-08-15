@@ -3,9 +3,9 @@ import os
 import pickle
 import shutil
 
-from keras import Input, Model
-from keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger, ProgbarLogger
-from keras.engine.saving import model_from_json
+import tensorflow as tf
+from tensorflow.keras import Input, Model
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger, ProgbarLogger
 from pandas import DataFrame
 from pandas import Series
 from pandas import concat
@@ -13,14 +13,16 @@ from pandas import read_csv
 from pandas import datetime
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
 from math import sqrt, sin, cos
 import matplotlib.pyplot as plt
 import numpy
 from numpy import concatenate, array
 import numpy as np
+from tensorflow.python.keras.models import model_from_json
+from tensorflow_core.python.keras.optimizer_v2.nadam import Nadam
 from tqdm import tqdm
 
 
@@ -166,7 +168,7 @@ Utility function to generate tensorboard and others callback, deal with director
     try:
         shutil.rmtree(log_dir)
     except OSError as e:
-        print("Error: %s : %s" % (log_dir, e.strerror))
+        print("Aviso: %s : %s" % (log_dir, e.strerror))
 
     try:
         # Get a list of all the file paths with first 8 letters from model_checkpoint_file.
@@ -213,7 +215,7 @@ def get_model_sequential(neurons, batch_size, X):
     # que eh o tamanho do batch
     model.add(LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='nadam')
+    model.compile(loss='mean_squared_error', optimizer=Nadam(lr=10 ** -4))
 
     return model
 
@@ -262,9 +264,22 @@ It returns your fitted model.
 
     model = get_model_sequential(neurons=neurons, batch_size=batch_size, X=X)
 
+    # Very important
+    # Our new model must be able to do 1 sample PREDICTIONS. We would need
+    # "batch_size" predictions to avoid an error, and we want 1 sample
+    # predictions. So, we load the weights into a new model with input shape
+    # of 1. Solution 3: Copy Weights do site abaixo:
+    # https://machinelearningmastery.com/use-different-batch-sizes-training-predicting-python-keras/
+    n_batch = 1
+    # re-define model
+    new_model = get_model_sequential(neurons=neurons, batch_size=n_batch, X=X)
+    # copy weights
+    old_weights = model.get_weights()
+    new_model.set_weights(old_weights)
+
     # Saving model structure to file
     # serialize model to JSON
-    model_json = model.to_json()
+    model_json = new_model.to_json()
     with open(model_file_name + ".json", "w") as json_file:
         json_file.write(model_json)
 
@@ -274,13 +289,15 @@ It returns your fitted model.
         # I believe we need to train each epoch and then reset states, beacause
         # this is a stateful lstm, and it would "remember" previous inputs if we
         # didn't reset it.
+        # Lembra que ele faz RESET depois de passar pelo dataset "X" INTEIRO,
+        # nao a cada sample
         training_history = model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=keras_callbacks)
         model.reset_states()
 
     # serialize (and save) WEIGHTS to HDF5 (equals to ".h5" file format)
     model.save_weights(model_file_name + ".hdf5")
 
-    return model, training_history
+    return new_model, training_history
 
 
 # make a one-step forecast
@@ -298,11 +315,12 @@ Performs a one-step prediction for a given LSTM model.
     return yhat[0, 0]
 
 
-def load_model(file_name="model"):
+def load_model(file_name="model", best_in_ranking=0):
     """
 Retrives a Keras model from a file.
 
     :param file_name: Prefix for JSON (model) and h5 (weights) files.
+    :param best_in_ranking: From all best validation losses saved, which one to retrive (Zero means smaller one).
     :return: Model obeject from Keras.
     """
     # load json and create model
@@ -315,7 +333,7 @@ Retrives a Keras model from a file.
     file_list = glob.glob("best_wei*")
 
     # load weights into new model
-    loaded_model.load_weights(file_list[2])
+    loaded_model.load_weights(file_list[best_in_ranking])
     print("Loaded model from disk")
 
     return loaded_model
@@ -370,10 +388,10 @@ Runs the experiment itself.
     :return: Error scores for each repeat.
     """
     # transform data to be stationary
-    raw_pos = [fake_position(i / 10) for i in range(-30000, 30000)]
+    raw_pos = [fake_position(i / 10) for i in range(-100, 100)]
     diff_pos = difference(raw_pos, 1)
     diff_pos = numpy.array(raw_pos)
-    raw_accel = [fake_acceleration(i / 100) for i in range(-30000, 30000)]
+    raw_accel = [fake_acceleration(i / 10) for i in range(-100, 100)]
     diff_accel = difference(raw_accel, 1)
     diff_accel = numpy.array(raw_accel)
 
@@ -384,15 +402,20 @@ Runs the experiment itself.
     supervised_values = numpy.transpose(numpy.vstack((diff_timestamp, diff_accel, diff_pos)))
     # split data into train and test-sets
     train, test = supervised_values[0:int(len(diff_pos) * 2 / 3), :], supervised_values[int(-len(diff_pos) * 1 / 3):, :]
+
+    # Zero first position
+    train[:, 2] = train[:, 2] - train[0, 2]
+    test[:, 2] = test[:, 2] - test[0, 2]
+
     # transform the scale of the data
     scaler, train_scaled, test_scaled = scale(train, test)
     # run experiment
     error_scores = list()
     for r in range(repeats):
         # fit the base model
-        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=1, neurons=20, validation_data=test_scaled);
-        save_training_history(history=training_history, training_history_file_path="training_history_serialized")
-        # lstm_model = load_model()
+        # lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=1, nb_epoch=300, neurons=1, validation_data=test_scaled);
+        # save_training_history(history=training_history, training_history_file_path="training_history_serialized")
+        lstm_model = load_model(best_in_ranking=0)
         # forecast test dataset
         predictions = list()
         for i in range(len(train_scaled)):
@@ -410,7 +433,7 @@ Runs the experiment itself.
         plt.close()
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
         plt.savefig("output_train.png", dpi=800)
-        # plt.show()
+        plt.show()
         rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
         print('%d) Test MSE: %.6f' % (r + 1, rmse))
         error_scores.append(rmse)
@@ -433,7 +456,7 @@ Runs the experiment itself.
         plt.close()
         plt.plot(range(len(predictions)), predictions, range(len(raw_pos[-len(test_scaled):])), raw_pos[-len(test_scaled):])
         plt.savefig("output_test.png", dpi=800)
-        # plt.show()
+        plt.show()
         rmse = mean_squared_error(raw_pos[-len(test_scaled):], predictions)
         print('%d) Test MSE: %.6f' % (r + 1, rmse))
         error_scores.append(rmse)
@@ -442,5 +465,6 @@ Runs the experiment itself.
 
 
 if __name__ == '__main__':
-    # entry point
-    experiment(1)
+    with tf.device("/cpu:0"):
+        # entry point
+        experiment(1)
