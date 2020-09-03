@@ -4,6 +4,7 @@ import pickle
 import shutil
 
 import tensorflow as tf
+import torch
 from tensorflow.keras import Input, Model
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger, ProgbarLogger
 from pandas import DataFrame
@@ -23,7 +24,10 @@ from numpy import concatenate, array
 import numpy as np
 from tensorflow.python.keras.models import model_from_json
 from tensorflow_core.python.keras.optimizer_v2.nadam import Nadam
+from torch import nn
+from torch.nn.utils.rnn import pack_sequence
 from tqdm import tqdm
+from ptk.timeseries import *
 
 
 def fake_position(x):
@@ -180,10 +184,10 @@ Utility function to generate tensorboard and others callback, deal with director
     except OSError as e:
         print("Error: %s : %s" % (model_checkpoint_file, e.strerror))
 
-    # try:
-    #     os.remove(csv_file_path)
-    # except OSError as e:
-    #     print("Error: %s : %s" % (csv_file_path, e.strerror))
+    try:
+        os.remove(csv_file_path)
+    except OSError as e:
+        print("Error: %s : %s" % (csv_file_path, e.strerror))
 
     tensorboard_callback = TensorBoard(log_dir=log_dir,
                                        histogram_freq=1,
@@ -206,216 +210,72 @@ Utility function to generate tensorboard and others callback, deal with director
     return [model_checkpoint_callback, csv_logger_callback]
 
 
-def get_model_sequential(neurons, batch_size, X):
-    model = Sequential()
-    # A quantidade de amostras (ex: 266) nao eh levada em conta aqui, o que
-    # importa eh o shape de entrada, por isso nao usa X.shape[0].
-    # O batch_size indica quantas SAMPLES sao usadas para avaliar o gradiente
-    # DE UMA VEZ. No caso, ajustamos a rede a cada 1 sample (onilne training),
-    # que eh o tamanho do batch
-    model.add(LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
-    model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer=Nadam(lr=10 ** -5))
+class LSTM(nn.Module):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, training_batch_size=64, epochs=150):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_layer_size = hidden_layer_size
+        self.output_size = output_size
+        self.training_batch_size = training_batch_size
+        self.epochs = epochs
 
-    return model
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True)
 
+        self.linear = nn.Linear(hidden_layer_size, output_size)
 
-def get_model_functional(neurons, batch_size, X):
-    input = Input(shape=(X.shape[1], X.shape[2]))
-    # A quantidade de amostras (ex: 266) nao eh levada em conta aqui, o que
-    # importa eh o shape de entrada, por isso nao usa X.shape[0].
-    # O batch_size indica quantas SAMPLES sao usadas para avaliar o gradiente
-    # DE UMA VEZ. No caso, ajustamos a rede a cada 1 sample (onilne training),
-    # que eh o tamanho do batch
-    output = LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True)(input)
-    output = Dense(1)(output)
+        # We train using multiple inputs (mini_batch), so we let this cell ready
+        # to be called.
+        self.hidden_cell_training = (torch.zeros(1, self.training_batch_size, self.hidden_layer_size),
+                                     torch.zeros(1, self.training_batch_size, self.hidden_layer_size))
 
-    model = Model(inputs=[input], outputs=[output])
+        # We predict using single input per time, so we let single batch cell
+        # ready here.
+        self.hidden_cell_prediction = (torch.zeros(1, 1, self.hidden_layer_size),
+                                       torch.zeros(1, 1, self.hidden_layer_size))
 
-    model.compile(loss='mean_squared_error', optimizer='nadam')
+    def forward(self, input_seq):
+        # (seq_len, batch, input_size), mas pode inverter o
+        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        lstm_out, self.hidden_cell_training = self.lstm(input_seq, self.hidden_cell_training)
+        # O "-1" aqui eh para a quantidade de FEATURES saindo do LSTM. Batch
+        # size acho que eh interpretado sozinho, tenho que testar.
+        predictions = self.linear(lstm_out.view(len(input_seq), -1))
 
-    return model
+        return predictions[-1]
 
+    def fit(self, X, y):
+        loss_function = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        epochs = self.epochs
 
-# fit an LSTM network to training data
-def fit_lstm(train, batch_size, nb_epoch, neurons, time_steps=1, model_file_name="model", validation_data=None, previous_model=None):
-    """
-This function assembles your network and train it with provided data (train).
-It returns your fitted model.
+        # Invertendo para a sequencia ser DEcrescente.
+        X = X[::-1]
+        y = y[::-1]
 
-    :param train: Training data in shape (samples x features)
-    :param batch_size: Size of each batch. For ONLINE training, batch == 1.
-    :param nb_epoch: How many epochs to train.
-    :param neurons: How many neurons in the LSTM cell.
-    :param time_steps: For a stateful LSTM, usually we have 1 time step and it's hard to think in an alternative case, so we leave it optional.
-    :param model_file_name: File name to save model after training.
-    :param validation_data: Same pattern that training data, but the portion of validation to check overfitting, etc.
-    :param previous_model: If we are going to resume a previous training process, the trained model is passed here. If None, new model is generated.
-    :return: Your trained model.
-    """
-    X, y = train[:, 0:-1], train[:, -1]
+        y = torch.from_numpy(y[:-1])
+        lista = [torch.as_tensor(i).view(-1, self.output_size) for i in X[:-1]]
+        X = pack_sequence(lista)
 
-    X_validation, y_validation = validation_data[:, 0:-1], validation_data[:, -1]
+        for i in range(epochs):
+            optimizer.zero_grad()
+            # self.hidden_cell_training = (torch.zeros(1, 1, self.hidden_layer_size),
+            #                              torch.zeros(1, 1, self.hidden_layer_size))
 
-    # (Samples, Time STEPS, Fetures)
-    # Ex: 266 amostras com 1 time step (NAO tem a ver com online training) e 1 feature (1 entrada)
-    X = X.reshape(X.shape[0], time_steps, X.shape[1])
+            y_pred = self(X)
 
-    X_validation = X_validation.reshape(X_validation.shape[0], time_steps, X_validation.shape[1])
+            single_loss = loss_function(y_pred, labels)
+            single_loss.backward()
+            optimizer.step()
 
-    # ========RESUME-OLD-TRAINING===============================================
-    # Este IF serve apenas para resgatar um modelo que ja tenha sido
-    # parcialmente treinado anteriormente. Util para o google colab, por exemplo.
-    if previous_model is None:
-        model = get_model_sequential(neurons=neurons, batch_size=batch_size, X=X)
-    else:
-        model = get_model_sequential(neurons=neurons, batch_size=batch_size, X=X)
-        model.compile(loss='mean_squared_error', optimizer=Nadam(lr=10 ** -5))
-        # Atualiza os pesos do modelo que faz predicao online.
-        old_weights = previous_model.get_weights()
-        model.set_weights(old_weights)
-    # ========END-RESUME-OLD-TRAINING===========================================
+        print(f'epoch: {i:3} loss: {single_loss.item():10.10f}')
 
-    # =================CHANGE-BATCH-INPUT-SIZE==================================
-    # Very important
-    # Our new model must be able to do 1 sample PREDICTIONS. We would need
-    # "batch_size" predictions to avoid an error, and we want 1 sample
-    # predictions. So, we load the weights into a new model with input shape
-    # of 1. Solution 3: Copy Weights do site abaixo:
-    # https://machinelearningmastery.com/use-different-batch-sizes-training-predicting-python-keras/
-    n_batch = 1
-    # re-define model
-    new_model = get_model_sequential(neurons=neurons, batch_size=n_batch, X=X)
-    # copy weights
-    old_weights = model.get_weights()
-    new_model.set_weights(old_weights)
-    # =================END-CHANGE-INPUT-BATCH-SIZE==============================
-
-    # Saving model structure to file
-    # serialize model to JSON
-    model_json = new_model.to_json()
-    with open(model_file_name + ".json", "w") as json_file:
-        json_file.write(model_json)
-
-    keras_callbacks = tensorboard_and_callbacks(batch_size, log_dir="./logs")
-
-    for i in tqdm(range(nb_epoch)):
-        # I believe we need to train each epoch and then reset states, beacause
-        # this is a stateful lstm, and it would "remember" previous inputs if we
-        # didn't reset it.
-        # Lembra que ele faz RESET depois de passar pelo dataset "X" INTEIRO,
-        # nao a cada sample
-        training_history = model.fit(X, y, epochs=1, batch_size=batch_size, verbose=1, shuffle=False, validation_data=(X_validation, y_validation), callbacks=keras_callbacks)
-        model.reset_states()
-
-    # serialize (and save) WEIGHTS to HDF5 (equals to ".h5" file format)
-    model.save_weights(model_file_name + ".hdf5")
-
-    # Atualiza os pesos do modelo que faz predicao online.
-    old_weights = model.get_weights()
-    new_model.set_weights(old_weights)
-
-    return new_model, training_history
-
-
-# make a one-step forecast
-def forecast_lstm(model, batch_size, X):
-    """
-Performs a one-step prediction for a given LSTM model.
-
-    :param model: Trained model that forecasts the data.
-    :param batch_size: Batch size used (usually 1).
-    :param X: Input data (single sample).
-    :return: Single step prediction.
-    """
-    X = X.reshape(1, 1, len(X))
-    yhat = model.predict(X, batch_size=batch_size)
-    return yhat[0, 0]
-
-
-def load_model(file_name="model", best_in_ranking=0):
-    """
-Retrives a Keras model from a file.
-
-    :param file_name: Prefix for JSON (model) and h5 (weights) files.
-    :param best_in_ranking: From all best validation losses saved, which one to retrive (Zero means smaller one).
-    :return: Model obeject from Keras.
-    """
-    # load json and create model
-    json_file = open(file_name + '.json', 'r')
-    loaded_model_json = json_file.read()
-    json_file.close()
-    loaded_model = model_from_json(loaded_model_json)
-
-    # Get a list of all the file paths with first 8 letters from model_checkpoint_file.
-    file_list = glob.glob("best_wei*")
-
-    # load weights into new model
-    loaded_model.load_weights(file_list[best_in_ranking])
-    print("Loaded model from disk")
-
-    return loaded_model
-
-
-def load_training(file_name="model", best_in_ranking=0):
-    """
-Retrives a Keras model from a file.
-
-    :param file_name: Prefix for JSON (model) and h5 (weights) files.
-    :param best_in_ranking: From all best validation losses saved, which one to retrive (Zero means smaller one).
-    :return: Model obeject from Keras.
-    """
-    # load json and create model
-    json_file = open(file_name + '.json', 'r')
-    loaded_model_json = json_file.read()
-    json_file.close()
-    loaded_model = model_from_json(loaded_model_json)
-
-    # load weights into new model
-    loaded_model.load_weights(file_name + '.hdf5')
-    print("Loaded model from disk")
-
-    return loaded_model
-
-
-def save_training_history(history, training_history_file_path="training_history_serialized"):
-    """
-Serialize a history object (generated with Keras model.fit()) and saves it into
-a binary file for later retrieval.
-
-Warning: Overwrites previous history if the same name is given.
-
-    :param history: Training history object generated with Keras model.fit().
-    :param training_history_file_path: File where history object is going to be serialized.
-    """
-    with open(training_history_file_path, "wb") as history_file:
-        training_history = pickle.dump(history, history_file)
-
-    # summarize history for loss and save it to file
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig("val_loss.png", dpi=800)
-    # plt.show()
-
-    return
-
-
-def load_training_history(training_history_file_path="training_history_serialized"):
-    """
-Retrieves a file containing training history, unserialize it and returns the
-history object (generated with model.fit()).
-
-    :param training_history_file_path: File where history object was serialized.
-    :return: Original history object (genrated with model.fit())
-    """
-    with open(training_history_file_path, "rb") as history_file:
-        training_history = pickle.load(history_file)
-
-    return training_history
+    # def get_params(self, **kwargs):
+    #
+    # def predict(self, X):
+    #
+    # def score(self, X, y, **kwargs):
+    #
+    # def set_params(self, **params):
 
 
 # run a repeated experiment
@@ -432,80 +292,42 @@ Runs the experiment itself.
     diff_pos = numpy.array(raw_pos)
     raw_accel = [fake_acceleration(i / 30) for i in range(-300, 300)]
     diff_accel = difference(raw_accel, 1)
-    diff_accel = numpy.array(raw_accel)
+    # diff_accel = numpy.array(raw_accel)
 
     raw_timestamp = range(len(raw_pos))
     # diff_timestamp = difference(numpy.array(raw_timestamp) + numpy.random.rand(len(raw_pos)), 1)
     diff_timestamp = array(raw_timestamp)
 
-    supervised_values = numpy.transpose(numpy.vstack((diff_timestamp, diff_accel, diff_pos)))
-    # split data into train and test-sets
-    train, test = supervised_values[0:int(len(diff_pos) * 2 / 3), :], supervised_values[int(-len(diff_pos) * 1 / 3):, :]
+    model = LSTM(input_size=1, hidden_layer_size=100,
+                 output_size=1, training_batch_size=598)
 
-    # Zero first position
-    train[:, 2] = train[:, 2] - train[0, 2]
-    test[:, 2] = test[:, 2] - test[0, 2]
+    X, y = time_series_split(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
-    # transform the scale of the data
-    scaler, train_scaled, test_scaled = scale(train, test)
-    # run experiment
-    error_scores = list()
-    for r in range(repeats):
-        # Resume old training
-        lstm_model = load_training(file_name="/content/outputs_dissertacao/model")
-        # fit the base model
-        lstm_model, training_history = fit_lstm(train=train_scaled, batch_size=100, nb_epoch=1, neurons=3, validation_data=test_scaled, previous_model=lstm_model);
-        save_training_history(history=training_history, training_history_file_path="training_history_serialized")
-        # lstm_model = load_model(best_in_ranking=0)
-        # forecast test dataset
-        predictions = list()
-        for i in range(len(train_scaled)):
-            # predict
-            # X, y = (np.random.rand(133, 3) * 2 - 1)[i, 0:-1], test_scaled[i, -1]
-            X, y = train_scaled[i, 0:-1], train_scaled[i, -1]
-            yhat = forecast_lstm(lstm_model, 1, X)
-            # invert scaling
-            yhat = invert_scale(scaler, X, yhat)
-            # invert differencing
-            # yhat = inverse_difference(np.hstack((raw_pos[-(len(test_scaled) + 1)], array(predictions))), yhat,  1)
-            # store forecast
-            predictions.append(yhat)
-        # report performance
-        plt.close()
-        plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
-        plt.savefig("output_train.png", dpi=800)
-        plt.show()
-        rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
-        print('%d) Test MSE: %.6f' % (r + 1, rmse))
-        error_scores.append(rmse)
+    model.fit(X, y)
 
-        lstm_model.reset_states()
+    # report performance
+    # plt.close()
+    # plt.plot(range(len(predictions)), predictions, range(len(raw_pos[:len(train_scaled)])), raw_pos[:len(train_scaled)])
+    # plt.savefig("output_train.png", dpi=800)
+    # plt.show()
+    # rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
 
-        predictions = list()
-        for i in range(len(test_scaled)):
-            # predict
-            # X, y = (np.random.rand(133, 3) * 2 - 1)[i, 0:-1], test_scaled[i, -1]
-            X, y = test_scaled[i, 0:-1], test_scaled[i, -1]
-            yhat = forecast_lstm(lstm_model, 1, X)
-            # invert scaling
-            yhat = invert_scale(scaler, X, yhat)
-            # invert differencing
-            # yhat = inverse_difference(np.hstack((raw_pos[-(len(test_scaled) + 1)], array(predictions))), yhat,  1)
-            # store forecast
-            predictions.append(yhat)
-        # report performance
-        plt.close()
-        plt.plot(range(len(predictions)), predictions, range(len(raw_pos[-len(test_scaled):])), raw_pos[-len(test_scaled):])
-        plt.savefig("output_test.png", dpi=800)
-        plt.show()
-        rmse = mean_squared_error(raw_pos[-len(test_scaled):], predictions)
-        print('%d) Test MSE: %.6f' % (r + 1, rmse))
-        error_scores.append(rmse)
+    error_scores = []
 
     return error_scores
 
 
 if __name__ == '__main__':
-    with tf.device("/cpu:0"):
-        # entry point
-        experiment(1)
+    experiment(1)
+
+# tscv = TimeSeriesSplit(n_splits=len(raw_accel) - 1)
+#
+# # train_index, test_index = tscv.split(array(raw_accel))
+#
+# # [train_index, test_index for train_index, test_index in tscv.split(array(raw_accel))]
+#
+# iterator_into_list = list(tscv.split(array(raw_accel)))
+# iterator_into_array = array(iterator_into_list)
+# train_index, test_index = iterator_into_array[:, :-1], iterator_into_array[:, 1]
+#
+# X, y = array(raw_accel)[train_index], array(diff_pos)[test_index]
