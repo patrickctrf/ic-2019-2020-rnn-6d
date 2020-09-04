@@ -20,7 +20,7 @@ from tensorflow.keras.layers import LSTM
 from math import sqrt, sin, cos
 import matplotlib.pyplot as plt
 import numpy
-from numpy import concatenate, array
+from numpy import concatenate, array, absolute
 import numpy as np
 from tensorflow.python.keras.models import model_from_json
 from tensorflow_core.python.keras.optimizer_v2.nadam import Nadam
@@ -252,8 +252,8 @@ class LSTM(nn.Module):
         X = X[::-1]
         y = y[::-1]
 
-        y = torch.from_numpy(y[:-1])
-        lista = [torch.as_tensor(i).view(-1, self.output_size) for i in X[:-1]]
+        y = torch.from_numpy(absolute(y[:-1])).float()
+        lista = [torch.from_numpy(i).view(-1, self.output_size).float() for i in X[:-1]]
         X = pack_sequence(lista)
 
         for i in range(epochs):
