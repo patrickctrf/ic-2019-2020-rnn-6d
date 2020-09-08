@@ -20,14 +20,15 @@ from tensorflow.keras.layers import LSTM
 from math import sqrt, sin, cos
 import matplotlib.pyplot as plt
 import numpy
-from numpy import concatenate, array, absolute
+from numpy import concatenate, array, absolute, arange
 import numpy as np
 from tensorflow.python.keras.models import model_from_json
 from tensorflow_core.python.keras.optimizer_v2.nadam import Nadam
 from torch import nn
-from torch.nn.utils.rnn import pack_sequence
+from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 from tqdm import tqdm
 from ptk.timeseries import *
+from ptk.utils import *
 
 
 def fake_position(x):
@@ -237,11 +238,16 @@ class LSTM(nn.Module):
         # (seq_len, batch, input_size), mas pode inverter o
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell_training = self.lstm(input_seq, self.hidden_cell_training)
+
+        inverse = pad_packed_sequence(lstm_out, batch_first=True)
+        
+        lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
+
         # O "-1" aqui eh para a quantidade de FEATURES saindo do LSTM. Batch
         # size acho que eh interpretado sozinho, tenho que testar.
-        predictions = self.linear(lstm_out.view(len(input_seq), -1))
+        predictions = self.linear(lstm_out)
 
-        return predictions[-1]
+        return predictions
 
     def fit(self, X, y):
         loss_function = nn.MSELoss()
@@ -252,8 +258,13 @@ class LSTM(nn.Module):
         X = X[::-1]
         y = y[::-1]
 
-        y = torch.from_numpy(absolute(y[:-1])).float()
-        lista = [torch.from_numpy(i).view(-1, self.output_size).float() for i in X[:-1]]
+        # y numpy array values into torch tensors
+        y = torch.from_numpy(y).float()
+        # split into mini batches
+        y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
+
+        # Para criar
+        lista = [torch.from_numpy(i).view(-1, self.output_size).float() for i in X]
         X = pack_sequence(lista)
 
         for i in range(epochs):
@@ -263,7 +274,7 @@ class LSTM(nn.Module):
 
             y_pred = self(X)
 
-            single_loss = loss_function(y_pred, labels)
+            single_loss = loss_function(y_pred, y)
             single_loss.backward()
             optimizer.step()
 
@@ -299,9 +310,9 @@ Runs the experiment itself.
     diff_timestamp = array(raw_timestamp)
 
     model = LSTM(input_size=1, hidden_layer_size=100,
-                 output_size=1, training_batch_size=598)
+                 output_size=1, training_batch_size=10)
 
-    X, y = time_series_split(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
+    X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
     model.fit(X, y)
 
