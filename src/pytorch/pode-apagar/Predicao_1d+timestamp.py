@@ -270,7 +270,7 @@ class LSTM(nn.Module):
         epochs = self.epochs
         best_validation_loss = 999999
 
-        f = open("loss_log.csv", "a")
+        f = open("loss_log.csv", "w")
         w = csv.writer(f)
         w.writerow(["epoch", "training_loss", "val_loss"])
 
@@ -352,7 +352,7 @@ Runs the experiment itself.
 
     # testar com lstm BIDIRECIONAL
     model = LSTM(input_size=1, hidden_layer_size=100, n_lstm_units=2,
-                 output_size=1, training_batch_size=60, epochs=200)
+                 output_size=1, training_batch_size=60, epochs=50)
 
     raw_pos = raw_pos[1:]
     raw_accel = raw_accel[1:]
