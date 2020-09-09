@@ -6,11 +6,11 @@ from math import sin, cos
 
 import numpy
 import torch
-from numpy import absolute, arange
+from numpy import arange
 from pandas import Series
 from ptk.timeseries import *
 from ptk.utils import *
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger
 from tensorflow.keras.layers import LSTM
 from torch import nn
@@ -31,10 +31,7 @@ It is supposed to be the output for the neural network.
     :return: Array os respective position in "y" axis.
     """
 
-    if x == 0:
-        return 1
-
-    return sin(x) / x
+    return cos(x) + 2 * sin(2 * x)
 
 
 def fake_acceleration(x):
@@ -49,10 +46,7 @@ It is supposed to be the input for the neural network.
     :return: Array os respective acceleration in "y" axis.
     """
 
-    if x == 0:
-        return -1 / 3
-
-    return -((x ** 2 - 2) * sin(x) + 2 * x * cos(x)) / x ** 3
+    return 4 * cos(2 * x) - sin(x)
 
 
 # create a differenced series
@@ -199,7 +193,7 @@ Utility function to generate tensorboard and others callback, deal with director
 
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, device="cpu"):
         super().__init__()
         self.input_size = input_size
         self.hidden_layer_size = hidden_layer_size
@@ -208,6 +202,7 @@ class LSTM(nn.Module):
         self.epochs = epochs
         self.validation_percent = validation_percent
         self.n_lstm_units = n_lstm_units
+        self.device = torch.device(device)
 
         self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True, num_layers=n_lstm_units)
 
@@ -215,13 +210,13 @@ class LSTM(nn.Module):
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
-        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size),
-                                     torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size))
+        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
+                                     torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
 
         # We predict using single input per time, so we let single batch cell
         # ready here.
-        self.hidden_cell_prediction = (torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size),
-                                       torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size))
+        self.hidden_cell_prediction = (torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
+                                       torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
 
     def forward(self, input_seq):
         # (seq_len, batch, input_size), mas pode inverter o
@@ -248,13 +243,13 @@ class LSTM(nn.Module):
     def fit(self, X, y):
         # =====DATA-PREPARATION=================================================
         # y numpy array values into torch tensors
-        y = torch.from_numpy(absolute(y)).float()
+        y = torch.from_numpy(y.astype("float32")).to(device)
         # split into mini batches
         y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
 
         # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
         # lista (que nao reclama de tamanhos diferentes em seus elementos).
-        lista_X = [torch.from_numpy(i).view(-1, self.output_size).float() for i in X]
+        lista_X = [torch.from_numpy(i.astype("float32")).view(-1, self.output_size).to(device) for i in X]
         X_batches = split_into_chunks(lista_X, self.training_batch_size)
 
         # pytorch only accepts different sizes tensors inside packed_sequences.
@@ -282,8 +277,8 @@ class LSTM(nn.Module):
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell_training = (torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size),
-                                             torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size))
+                self.hidden_cell_training = (torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+                                             torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
 
                 y_pred = self(X)
 
@@ -296,8 +291,8 @@ class LSTM(nn.Module):
             training_loss = training_loss / (j + 1)
 
             for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * self.validation_percent):], y_batches[int(len(y_batches) * self.validation_percent):])):
-                self.hidden_cell_training = (torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size),
-                                             torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size))
+                self.hidden_cell_training = (torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+                                             torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
 
                 single_loss = loss_function(y_pred, y)
@@ -352,7 +347,7 @@ Runs the experiment itself.
 
     # testar com lstm BIDIRECIONAL
     model = LSTM(input_size=1, hidden_layer_size=100, n_lstm_units=2,
-                 output_size=1, training_batch_size=60, epochs=200)
+                 output_size=1, training_batch_size=60, epochs=400, device=dev)
 
     raw_pos = raw_pos[1:]
     raw_accel = raw_accel[1:]
@@ -362,7 +357,7 @@ Runs the experiment itself.
     diff_accel = array(diff_accel)
     diff_pos = array(diff_pos)
 
-    X_scaler = MinMaxScaler(feature_range=(0, 1))
+    X_scaler = StandardScaler()
     raw_accel = X_scaler.fit_transform(raw_accel.reshape(-1, 1))
     y_scaler = MinMaxScaler(feature_range=(-1, 1))
     diff_pos = y_scaler.fit_transform(diff_pos.reshape(-1, 1))
@@ -376,6 +371,9 @@ Runs the experiment itself.
     X = X[::-1]
     y = y[::-1]
 
+    # enabling CUDA
+    model.to(device)
+    # Let's go fit
     model.fit(X, y)
 
     # report performance
@@ -391,24 +389,12 @@ Runs the experiment itself.
 
 
 if __name__ == '__main__':
-    # if torch.cuda.is_available():
-    #     dev = "cuda:0"
-    #     print("Usando GPU")
-    # else:
-    #     dev = "cpu"
-    #     print("Usando CPU")
-    # device = torch.device(dev)
+    if torch.cuda.is_available():
+        dev = "cuda:0"
+        print("Usando GPU")
+    else:
+        dev = "cpu"
+        print("Usando CPU")
+    device = torch.device(dev)
 
     experiment(1)
-
-# tscv = TimeSeriesSplit(n_splits=len(raw_accel) - 1)
-#
-# # train_index, test_index = tscv.split(array(raw_accel))
-#
-# # [train_index, test_index for train_index, test_index in tscv.split(array(raw_accel))]
-#
-# iterator_into_list = list(tscv.split(array(raw_accel)))
-# iterator_into_array = array(iterator_into_list)
-# train_index, test_index = iterator_into_array[:, :-1], iterator_into_array[:, 1]
-#
-# X, y = array(raw_accel)[train_index], array(diff_pos)[test_index]
