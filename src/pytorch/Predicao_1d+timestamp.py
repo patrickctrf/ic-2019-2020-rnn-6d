@@ -1,7 +1,4 @@
 import csv
-import glob
-import os
-import shutil
 from math import sin, cos
 
 import numpy
@@ -10,8 +7,9 @@ from numpy import arange
 from pandas import Series
 from ptk.timeseries import *
 from ptk.utils import *
+from skimage.metrics import mean_squared_error
+from sklearn.metrics import make_scorer
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, CSVLogger
 from tensorflow.keras.layers import LSTM
 from torch import nn
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
@@ -139,59 +137,6 @@ inverse scale (yhat) too.
     return inverted[0, -1]
 
 
-def tensorboard_and_callbacks(batch_size, log_dir="./logs", model_checkpoint_file="best_weights.{val_loss:.4f}-{epoch:05d}.hdf5", csv_file_path="loss_log.csv"):
-    """
-Utility function to generate tensorboard and others callback, deal with directory needs and keep the code clean.
-
-    :param batch_size: batch size in training data (needed for compatibility).
-    :param log_dir: Where to save the logs files.
-    :param model_checkpoint_file: File to save weights that resulted best (smallest) validation loss.
-    :param csv_file_path: CSV file path to save loss and validation loss values along the training process.
-    :return: tesnorboard_callback for keras callbacks.
-    """
-    # We need to exclude previous tensorboard and callbacks logs, or it is gone
-    # produce errors when trying to visualize it.
-    try:
-        shutil.rmtree(log_dir)
-    except OSError as e:
-        print("Aviso: %s : %s" % (log_dir, e.strerror))
-
-    try:
-        # Get a list of all the file paths with first 8 letters from model_checkpoint_file.
-        file_list = glob.glob(model_checkpoint_file[:8] + "*")
-
-        # Iterate over the list of filepaths & remove each file.
-        for file_path in file_list:
-            os.remove(file_path)
-    except OSError as e:
-        print("Error: %s : %s" % (model_checkpoint_file, e.strerror))
-
-    try:
-        os.remove(csv_file_path)
-    except OSError as e:
-        print("Error: %s : %s" % (csv_file_path, e.strerror))
-
-    tensorboard_callback = TensorBoard(log_dir=log_dir,
-                                       histogram_freq=1,
-                                       batch_size=batch_size,
-                                       write_grads=True,
-                                       write_graph=True,
-                                       write_images=True,
-                                       update_freq="epoch",
-                                       embeddings_freq=0,
-                                       embeddings_metadata=None)
-
-    model_checkpoint_callback = ModelCheckpoint(filepath=model_checkpoint_file,
-                                                save_weights_only=True,
-                                                monitor='val_loss',
-                                                mode='min',
-                                                save_best_only=True)
-
-    csv_logger_callback = CSVLogger(csv_file_path, separator=",", append=True)
-
-    return [model_checkpoint_callback, csv_logger_callback]
-
-
 class LSTM(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, device="cpu"):
         super().__init__()
@@ -204,9 +149,9 @@ class LSTM(nn.Module):
         self.n_lstm_units = n_lstm_units
         self.device = torch.device(device)
 
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True, num_layers=n_lstm_units)
+        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units)
 
-        self.linear = nn.Linear(hidden_layer_size, output_size)
+        self.linear = nn.Linear(self.hidden_layer_size, self.output_size)
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
@@ -217,6 +162,8 @@ class LSTM(nn.Module):
         # ready here.
         self.hidden_cell_prediction = (torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
                                        torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
+
+        return
 
     def forward(self, input_seq):
         # (seq_len, batch, input_size), mas pode inverter o
@@ -243,13 +190,18 @@ class LSTM(nn.Module):
     def fit(self, X, y):
         # =====DATA-PREPARATION=================================================
         # y numpy array values into torch tensors
-        y = torch.from_numpy(y.astype("float32")).to(device)
+        self.train()
+        if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
+        y = y.to(self.device)
         # split into mini batches
         y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
 
         # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
         # lista (que nao reclama de tamanhos diferentes em seus elementos).
-        lista_X = [torch.from_numpy(i.astype("float32")).view(-1, self.output_size).to(device) for i in X]
+        if not isinstance(X, torch.Tensor):
+            lista_X = [torch.from_numpy(i.astype("float32")).view(-1, self.output_size).to(self.device) for i in X]
+        else:
+            lista_X = [i.view(-1, self.output_size) for i in X]
         X_batches = split_into_chunks(lista_X, self.training_batch_size)
 
         # pytorch only accepts different sizes tensors inside packed_sequences.
@@ -315,15 +267,127 @@ class LSTM(nn.Module):
         # At the end of training, save the final model.
         torch.save(self, "model.pth")
 
+        self.eval()
+
         return self
 
-    # def get_params(self, **kwargs):
-    #
-    # def predict(self, X):
-    #
-    # def score(self, X, y, **kwargs):
-    #
-    # def set_params(self, **params):
+    def get_params(self, *args, **kwargs):
+        """
+Get parameters for this estimator.
+
+        :param args: Always ignored, exists for compatibility.
+        :param kwargs: Always ignored, exists for compatibility.
+        :return: Dict containing all parameters for this estimator.
+        """
+        return {"input_size": self.input_size,
+                "hidden_layer_size": self.hidden_layer_size,
+                "output_size": self.output_size,
+                "n_lstm_units": self.n_lstm_units,
+                "epochs": self.epochs,
+                "training_batch_size": self.training_batch_size,
+                "validation_percent": self.validation_percent,
+                "device": self.device}
+
+    def predict(self, X):
+        """
+Predict using this pytorch model.
+
+        :param X: Input data of shape (n_samples, n_features).
+        :return: The y predicted values.
+        """
+        self.eval()
+
+        # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
+        # lista (que nao reclama de tamanhos diferentes em seus elementos).
+        if not isinstance(X, torch.Tensor):
+            lista_X = [torch.from_numpy(i.astype("float32")).view(-1, self.output_size).to(self.device) for i in X]
+        else:
+            lista_X = [i.view(-1, self.output_size) for i in X]
+
+        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device),
+                                     torch.zeros(self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device))
+
+        X = pack_sequence(lista_X, enforce_sorted=False)
+
+        return self(X)
+
+    def score(self, X, y, **kwargs):
+        """
+Return the RMSE error score of the prediction.
+
+        :param X: Input data os shape (n_samples, n_features).
+        :param y: Predicted y values of shape (n_samples, n_outputs).)
+        :param kwargs: Always ignored, exists for compatibility.
+        :return: RMSE score.
+        """
+        # Se for um tensor, devemos converter antes para array numpy, ou o
+        # sklearn retorna erro na RMSE.
+        if isinstance(y, torch.Tensor):
+            y = y.numpy()
+
+        return make_scorer((mean_squared_error(self.predict(X).cpu().detach().numpy(), y)) ** 1 / 2, greater_is_better=False)
+
+    def set_params(self, **params):
+        """
+Set the parameters of this estimator.
+
+        :param params: (Dict) Estimator parameters.
+        :return: Estimator instance.
+        """
+        input_size = params.get('input_size')
+        hidden_layer_size = params.get('hidden_layer_size')
+        output_size = params.get('output_size')
+        n_lstm_units = params.get('n_lstm_units')
+        epochs = params.get('epochs')
+        training_batch_size = params.get('training_batch_size')
+        validation_percent = params.get('validation_percent')
+        device = params.get('device')
+
+        if input_size:
+            self.input_size = input_size
+            self.__reinit_params__()
+        if hidden_layer_size:
+            self.hidden_layer_size = hidden_layer_size
+            self.__reinit_params__()
+        if output_size:
+            self.output_size = output_size
+            self.__reinit_params__()
+        if n_lstm_units:
+            self.n_lstm_units = n_lstm_units
+            self.__reinit_params__()
+        if epochs:
+            self.epochs = epochs
+            self.__reinit_params__()
+        if training_batch_size:
+            self.training_batch_size = training_batch_size
+            self.__reinit_params__()
+        if validation_percent:
+            self.validation_percent = validation_percent
+            self.__reinit_params__()
+        if device:
+            self.device = device
+            self.__reinit_params__()
+
+        return self
+
+    def __reinit_params__(self):
+        """
+Useful for updating params when 'set_params' is called.
+        """
+
+        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units)
+
+        self.linear = nn.Linear(self.hidden_layer_size, self.output_size)
+
+        # We train using multiple inputs (mini_batch), so we let this cell ready
+        # to be called.
+        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
+                                     torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
+
+        # We predict using single input per time, so we let single batch cell
+        # ready here.
+        self.hidden_cell_prediction = (torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
+                                       torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
 
 
 # run a repeated experiment
@@ -373,6 +437,7 @@ Runs the experiment itself.
 
     # enabling CUDA
     model.to(device)
+
     # Let's go fit
     model.fit(X, y)
 
