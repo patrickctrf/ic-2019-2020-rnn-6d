@@ -138,7 +138,7 @@ inverse scale (yhat) too.
 
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, device="cpu"):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device="cpu"):
         super().__init__()
         self.input_size = input_size
         self.hidden_layer_size = hidden_layer_size
@@ -147,21 +147,27 @@ class LSTM(nn.Module):
         self.epochs = epochs
         self.validation_percent = validation_percent
         self.n_lstm_units = n_lstm_units
+        if bidirectional:
+            self.bidirectional = 1
+            self.num_directions = 2
+        else:
+            self.bidirectional = 0
+            self.num_directions = 1
         self.device = torch.device(device)
 
-        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units)
+        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
-        self.linear = nn.Linear(self.hidden_layer_size, self.output_size)
+        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
-        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
-                                     torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
+        self.hidden_cell_training = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
+                                     torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
 
         # We predict using single input per time, so we let single batch cell
         # ready here.
-        self.hidden_cell_prediction = (torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
-                                       torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
+        self.hidden_cell_prediction = (torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
+                                       torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
 
         return
 
@@ -170,18 +176,25 @@ class LSTM(nn.Module):
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell_training = self.lstm(input_seq, self.hidden_cell_training)
 
-        # Para desempacotarmos a packed sequence, usamos esta funcao, que
-        # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
-        # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
-        # elemento de sua tupla (inverse[1]).
-        inverse = pad_packed_sequence(lstm_out, batch_first=True)
+        if self.training is True:
+            # Para desempacotarmos a packed sequence, usamos esta funcao, que
+            # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
+            # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
+            # elemento de sua tupla (inverse[1]).
+            inverse = pad_packed_sequence(lstm_out, batch_first=True)
 
-        # A saida do LSTM eh uma packed sequence, pois cada sequencia tem um
-        # tamanho diferente. So nos interessa o ultimo elemento de cada
-        # sequencia, que esta informado no segundo elemento (inverse[1]).
-        # Fazemos o slicing do numpy selecionando todas as colunas com 'arange'
-        # e o elemento que desejamos'inverse[1] -1'.
-        lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
+            # A saida do LSTM eh uma packed sequence, pois cada sequencia tem um
+            # tamanho diferente. So nos interessa o ultimo elemento de cada
+            # sequencia, que esta informado no segundo elemento (inverse[1]).
+            # Fazemos o slicing do numpy selecionando todas as colunas com 'arange'
+            # e o elemento que desejamos'inverse[1] -1'.
+            lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
+        else:
+            # All batch size, whatever sequence length, forward direction and
+            # lstm output size (hidden size).
+            # We only want the last output of lstm (end of sequence), that is
+            # the reason of '[:,-1,:]'.
+            lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
 
         predictions = self.linear(lstm_out)
 
@@ -229,8 +242,8 @@ class LSTM(nn.Module):
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell_training = (torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                             torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
+                self.hidden_cell_training = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+                                             torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
 
                 y_pred = self(X)
 
@@ -243,8 +256,8 @@ class LSTM(nn.Module):
             training_loss = training_loss / (j + 1)
 
             for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * self.validation_percent):], y_batches[int(len(y_batches) * self.validation_percent):])):
-                self.hidden_cell_training = (torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                             torch.zeros(self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
+                self.hidden_cell_training = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+                                             torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
 
                 single_loss = loss_function(y_pred, y)
@@ -286,16 +299,18 @@ Get parameters for this estimator.
                 "epochs": self.epochs,
                 "training_batch_size": self.training_batch_size,
                 "validation_percent": self.validation_percent,
+                "bidirectional": self.bidirectional,
                 "device": self.device}
 
     def predict(self, X):
         """
-Predict using this pytorch model.
+Predict using this pytorch model. Useful for sklearn and/or mini-batch prediction.
 
         :param X: Input data of shape (n_samples, n_features).
         :return: The y predicted values.
         """
-        self.eval()
+        # This method (predict) is intended to be used within training procces.
+        self.train()
 
         # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
         # lista (que nao reclama de tamanhos diferentes em seus elementos).
@@ -304,12 +319,16 @@ Predict using this pytorch model.
         else:
             lista_X = [i.view(-1, self.output_size) for i in X]
 
-        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device),
-                                     torch.zeros(self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device))
+        self.hidden_cell_training = (torch.zeros(self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device),
+                                     torch.zeros(self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device))
 
         X = pack_sequence(lista_X, enforce_sorted=False)
 
-        return self(X)
+        predictions = self(X)
+
+        self.eval()
+
+        return predictions
 
     def score(self, X, y, **kwargs):
         """
@@ -341,6 +360,7 @@ Set the parameters of this estimator.
         epochs = params.get('epochs')
         training_batch_size = params.get('training_batch_size')
         validation_percent = params.get('validation_percent')
+        bidirectional = params.get('bidirectional')
         device = params.get('device')
 
         if input_size:
@@ -364,6 +384,13 @@ Set the parameters of this estimator.
         if validation_percent:
             self.validation_percent = validation_percent
             self.__reinit_params__()
+        if bidirectional is not None:
+            if bidirectional:
+                self.bidirectional = 1
+                self.num_directions = 2
+            else:
+                self.bidirectional = 0
+                self.num_directions = 1
         if device:
             self.device = device
             self.__reinit_params__()
@@ -375,19 +402,19 @@ Set the parameters of this estimator.
 Useful for updating params when 'set_params' is called.
         """
 
-        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units)
+        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
-        self.linear = nn.Linear(self.hidden_layer_size, self.output_size)
+        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
-        self.hidden_cell_training = (torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
-                                     torch.zeros(self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
+        self.hidden_cell_training = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
+                                     torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
 
         # We predict using single input per time, so we let single batch cell
         # ready here.
-        self.hidden_cell_prediction = (torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
-                                       torch.zeros(self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
+        self.hidden_cell_prediction = (torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
+                                       torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
 
 
 # run a repeated experiment
@@ -410,8 +437,8 @@ Runs the experiment itself.
     # diff_timestamp = array(raw_timestamp)
 
     # testar com lstm BIDIRECIONAL
-    model = LSTM(input_size=1, hidden_layer_size=100, n_lstm_units=2,
-                 output_size=1, training_batch_size=60, epochs=400, device=dev)
+    model = LSTM(input_size=1, hidden_layer_size=100, n_lstm_units=2, bidirectional=False,
+                 output_size=1, training_batch_size=60, epochs=4, device=dev)
 
     raw_pos = raw_pos[1:]
     raw_accel = raw_accel[1:]
@@ -437,7 +464,6 @@ Runs the experiment itself.
 
     # enabling CUDA
     model.to(device)
-
     # Let's go fit
     model.fit(X, y)
 
