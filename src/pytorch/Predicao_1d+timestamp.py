@@ -138,7 +138,7 @@ inverse scale (yhat) too.
 
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device="cpu"):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu")):
         super().__init__()
         self.input_size = input_size
         self.hidden_layer_size = hidden_layer_size
@@ -153,7 +153,7 @@ class LSTM(nn.Module):
         else:
             self.bidirectional = 0
             self.num_directions = 1
-        self.device = torch.device(device)
+        self.device = device
 
         self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
@@ -270,7 +270,8 @@ class LSTM(nn.Module):
             if best_validation_loss > validation_loss:
                 # Update the new best loss.
                 best_validation_loss = validation_loss
-                torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
+                # torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
+                torch.save(self, "best_model_epoch_" + str(i) + ".pth")
 
             print(f'\nepoch: {i:1} train_loss: {training_loss.item():10.10f}', f'val_loss: {validation_loss.item():10.10f}')
             w.writerow([i, training_loss.item(), validation_loss.item()])
@@ -278,7 +279,7 @@ class LSTM(nn.Module):
         f.close()
 
         # At the end of training, save the final model.
-        torch.save(self, "model.pth")
+        torch.save(self, "last_training_model.pth")
 
         self.eval()
 
@@ -438,7 +439,7 @@ Runs the experiment itself.
 
     # testar com lstm BIDIRECIONAL
     model = LSTM(input_size=1, hidden_layer_size=100, n_lstm_units=2, bidirectional=False,
-                 output_size=1, training_batch_size=60, epochs=4, device=dev)
+                 output_size=1, training_batch_size=60, epochs=4, device=device)
 
     raw_pos = raw_pos[1:]
     raw_accel = raw_accel[1:]
