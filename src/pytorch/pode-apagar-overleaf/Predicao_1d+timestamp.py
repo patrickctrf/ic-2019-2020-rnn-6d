@@ -495,7 +495,7 @@ Runs the experiment itself.
     model.fit(X, y)
 
     X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
-    y_graphic = diff_pos.astype("float32")
+    y_graphic = torch.from_numpy(diff_pos.astype("float32")).to(device)
 
     model = torch.load("best_model.pth")
     model.to(device)
@@ -504,18 +504,14 @@ Runs the experiment itself.
                          torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
     model.eval()
     for X in X_graphic:
-        yhat.append(model(X.view(1, -1, 1)).detach().cpu().numpy())
-
-    # from list to numpy array
-    yhat = array(yhat).reshape(-1)
+        yhat.append(model(X.view(1, -1, 1)))
 
     # report performance
     plt.close()
-    plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
-    plt.savefig("output_reconstruction.png", dpi=800)
-    # plt.show()
-    rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
-    print("RMSE trajetoria inteira: ", rmse)
+    plt.plot(range(len(yhat)), yhat, range(len(y)), y)
+    plt.savefig("output_train.png", dpi=800)
+    plt.show()
+    # rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
 
     error_scores = []
 
