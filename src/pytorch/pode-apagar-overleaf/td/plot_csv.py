@@ -21,6 +21,7 @@ plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['training_loss', 'val_loss'], loc='upper right')
 plt.savefig("losses.png", dpi=400)
-# plt.show()
 plt.close()
+
+# plt.show()
 

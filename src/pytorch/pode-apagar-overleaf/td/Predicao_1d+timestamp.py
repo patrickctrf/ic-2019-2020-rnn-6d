@@ -186,9 +186,6 @@ class LSTM(nn.Module):
             self.num_directions = 1
         self.device = device
 
-        self.loss_function = None
-        self.optimizer = None
-
         self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
         self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
@@ -254,20 +251,20 @@ class LSTM(nn.Module):
         X_batches = aux_list
         # =====fim-DATA-PREPARATION=============================================
 
+        loss_function = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
 
-        f = open("loss_log.csv", "w")
+        f = open("loss_log.csv", "a")
         w = csv.writer(f)
         w.writerow(["epoch", "training_loss", "val_loss"])
 
         for i in tqdm(range(epochs)):
             training_loss = 0
             validation_loss = 0
-            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
-                self.optimizer.zero_grad()
+            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * self.validation_percent)], y_batches[:int(len(y_batches) * self.validation_percent)])):
+                optimizer.zero_grad()
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
@@ -276,20 +273,20 @@ class LSTM(nn.Module):
 
                 y_pred = self(X)
 
-                single_loss = self.loss_function(y_pred, y)
+                single_loss = loss_function(y_pred, y)
                 single_loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 training_loss += single_loss
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * (1.0 - self.validation_percent)):], y_batches[int(len(y_batches) * (1.0 - self.validation_percent)):])):
+            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * self.validation_percent):], y_batches[int(len(y_batches) * self.validation_percent):])):
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
 
-                single_loss = self.loss_function(y_pred, y)
+                single_loss = loss_function(y_pred, y)
 
                 validation_loss += single_loss
             # Tira a media das losses.
@@ -312,8 +309,7 @@ class LSTM(nn.Module):
 
         self.eval()
 
-        # Returns the best model found so far.
-        return torch.load("best_model.pth")
+        return self
 
     def get_params(self, *args, **kwargs):
         """
@@ -432,9 +428,6 @@ Set the parameters of this estimator.
 Useful for updating params when 'set_params' is called.
         """
 
-        self.loss_function = nn.MSELoss()
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
-
         self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
         self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
@@ -458,64 +451,66 @@ Runs the experiment itself.
     :param repeats: Number of times to repeat the experiment. When we are trying to create a good network, it is reccomended to use 1.
     :return: Error scores for each repeat.
     """
-    # create data
-    raw_timestamp = range(600)
-    raw_timestamp = array(raw_timestamp) + numpy.random.rand(len(raw_timestamp))
-    diff_timestamp = difference(numpy.array(raw_timestamp) + 2 * numpy.random.rand(raw_timestamp.shape[0]) - 1, 1)
+    # transform data to be stationary
     raw_pos = [fake_position(i / 30) for i in range(-300, 300)]
-    raw_pos = array(raw_pos)
     diff_pos = difference(raw_pos, 1)
-    diff_pos = array(diff_pos)
     raw_accel = [fake_acceleration(i / 30) for i in range(-300, 300)]
-    raw_accel = array(raw_accel)
     diff_accel = difference(raw_accel, 1)
-    diff_accel = array(diff_accel)
+    # diff_accel = numpy.array(raw_accel)
 
-    # Scaling data
+    # raw_timestamp = range(len(raw_pos))
+    # # diff_timestamp = difference(numpy.array(raw_timestamp) + numpy.random.rand(len(raw_pos)), 1)
+    # diff_timestamp = array(raw_timestamp)
+
+    # testar com lstm BIDIRECIONAL
+    model = LSTM(input_size=1, hidden_layer_size=40, n_lstm_units=3, bidirectional=False,
+                 output_size=1, training_batch_size=60, epochs=2000, device=device)
+
+    raw_pos = raw_pos[1:]
+    raw_accel = raw_accel[1:]
+
+    raw_accel = array(raw_accel)
+    raw_pos = array(raw_pos)
+    diff_accel = array(diff_accel)
+    diff_pos = array(diff_pos)
+
     X_scaler = StandardScaler()
     raw_accel = X_scaler.fit_transform(raw_accel.reshape(-1, 1))
     y_scaler = MinMaxScaler(feature_range=(-1, 1))
     diff_pos = y_scaler.fit_transform(diff_pos.reshape(-1, 1))
-
-    raw_timestamp = raw_timestamp[1:]
-    raw_pos = raw_pos[1:]
-    raw_accel = raw_accel[1:]
 
     raw_accel = raw_accel.reshape(-1)
     diff_pos = diff_pos.reshape(-1)
 
     X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
-    model = LSTM(input_size=1, hidden_layer_size=80, n_lstm_units=3, bidirectional=False,
-                 output_size=1, training_batch_size=60, epochs=400, device=device)
+    # Invertendo para a sequencia ser DEcrescente.
+    # X = X[::-1]
+    # y = y[::-1]
 
     # enabling CUDA
     model.to(device)
-    # Let's go fit! Comment if only loading pretrained model.
-    model.fit(X, y)
+    # Let's go fit
+    # model.fit(X, y)
 
     X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
-    y_graphic = diff_pos.astype("float32")
+    y_graphic = torch.from_numpy(diff_pos.astype("float32")).to(device)
 
-    # =====================TEST=================================================
-    model = torch.load("best_model.pth")
+    model = torch.load("last_training_model.pth")
     model.to(device)
     yhat = []
     model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
                          torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
     model.eval()
     for X in X_graphic:
-        yhat.append(model(X.view(1, -1, 1)).detach().cpu().numpy())
-    # from list to numpy array
-    yhat = array(yhat).reshape(-1)
+        yhat.append(model(X.view(1, -1, 1)))
 
-    # ======================PLOT================================================
+    # report performance
     plt.close()
-    plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
-    plt.savefig("output_reconstruction.png", dpi=800)
+    plt.plot(range(len(yhat)), yhat, range(len(y)), y)
+    plt.savefig("output_train.png", dpi=800)
     plt.show()
-    rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
-    print("RMSE trajetoria inteira: ", rmse)
+    # rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
 
     error_scores = []
 
