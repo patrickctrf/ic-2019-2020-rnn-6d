@@ -492,7 +492,7 @@ Runs the experiment itself.
     # enabling CUDA
     model.to(device)
     # Let's go fit! Comment if only loading pretrained model.
-    model.fit(X, y)
+    # model.fit(X, y)
 
     X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
     y_graphic = diff_pos.astype("float32")
@@ -512,6 +512,7 @@ Runs the experiment itself.
     # ======================PLOT================================================
     plt.close()
     plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
+    plt.legend(['predict', 'reference'], loc='upper right')
     plt.savefig("output_reconstruction.png", dpi=800)
     plt.show()
     rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
