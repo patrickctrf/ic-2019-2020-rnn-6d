@@ -4,12 +4,13 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange
-from pandas import Series
+from numpy import arange, random
+from pandas import Series, DataFrame
 from ptk.timeseries import *
 from ptk.utils import *
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from torch import nn
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
@@ -233,6 +234,7 @@ class LSTM(nn.Module):
         # =====DATA-PREPARATION=================================================
         # y numpy array values into torch tensors
         self.train()
+        self.to(self.device)
         if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
         y = y.to(self.device)
         # split into mini batches
@@ -358,7 +360,7 @@ Predict using this pytorch model. Useful for sklearn and/or mini-batch predictio
                                 torch.zeros(self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device))
             y.append(self(X))
 
-        return torch.as_tensor(y).view(-1, self.output_size)
+        return torch.as_tensor(y).view(-1, self.output_size).detach().cpu().numpy()
 
     def score(self, X, y, **kwargs):
         """
@@ -432,9 +434,6 @@ Set the parameters of this estimator.
 Useful for updating params when 'set_params' is called.
         """
 
-        self.loss_function = nn.MSELoss()
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
-
         self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
         self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
@@ -443,11 +442,6 @@ Useful for updating params when 'set_params' is called.
         # to be called.
         self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
                             torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
-
-        # We predict using single input per time, so we let single batch cell
-        # ready here.
-        self.hidden_cell_prediction = (torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
-                                       torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
 
 
 # run a repeated experiment
@@ -477,6 +471,8 @@ Runs the experiment itself.
     y_scaler = MinMaxScaler(feature_range=(-1, 1))
     diff_pos = y_scaler.fit_transform(diff_pos.reshape(-1, 1))
 
+    # when we do diff process, we lose 1 element (not dimension) in size. Here
+    # we realign raw and diff variables.
     raw_timestamp = raw_timestamp[1:]
     raw_pos = raw_pos[1:]
     raw_accel = raw_accel[1:]
@@ -487,18 +483,48 @@ Runs the experiment itself.
     X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
     model = LSTM(input_size=1, hidden_layer_size=80, n_lstm_units=3, bidirectional=False,
-                 output_size=1, training_batch_size=60, epochs=400, device=device)
+                 output_size=1, training_batch_size=60, epochs=7500, device=device)
 
-    # enabling CUDA
-    model.to(device)
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
 
+    # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
+    # EXPOENTES.
+    hidden_layer_size = random.uniform(40, 200, 10).astype("int")
+    n_lstm_units = array(range(1, 4))
+
+    # Une os parametros de entrada em um unico dicionario a ser passado para a
+    # funcao.
+    parametros = {'hidden_layer_size': hidden_layer_size, 'n_lstm_units': n_lstm_units}
+
+    splitter = TimeSeriesSplitCV(n_splits=3,
+                                 training_percent=0.5,
+                                 blocking_split=False)
+    regressor = model
+    cv_search = \
+        RandomizedSearchCV(estimator=regressor, cv=splitter,
+                           param_distributions=parametros,
+                           refit="MSE",
+                           verbose=1,
+                           # n_jobs=4,
+                           scoring={"MSE": make_scorer(mean_squared_error, greater_is_better=True, needs_proba=False)})
+
+    # Realizamos a busca atraves do treinamento
+    cv_search.fit(X, y)
+
+    print(cv_search.cv_results_)
+
+    cv_dataframe_results = DataFrame.from_dict(cv_search.cv_results_)
+    cv_dataframe_results.to_csv("cv_results.csv")
+
+    model = cv_search.best_estimator_
+
+    # =====================TEST=================================================
+    # These arrays/tensors are only helpful for plotting the prediction.
     X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
     y_graphic = diff_pos.astype("float32")
 
-    # =====================TEST=================================================
-    model = torch.load("best_model.pth")
+    # model = torch.load("best_model.pth")
     model.to(device)
     yhat = []
     model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
@@ -514,7 +540,7 @@ Runs the experiment itself.
     plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
     plt.legend(['predict', 'reference'], loc='upper right')
     plt.savefig("output_reconstruction.png", dpi=800)
-    plt.show()
+    # plt.show()
     rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
     print("RMSE trajetoria inteira: ", rmse)
 
