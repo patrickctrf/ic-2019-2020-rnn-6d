@@ -303,6 +303,7 @@ class LSTM(nn.Module):
                 best_validation_loss = validation_loss
                 # torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
                 torch.save(self, "best_model.pth")
+                torch.save(self.state_dict(), "best_model_state_dict.pth")
 
             print(f'\nepoch: {i:1} train_loss: {training_loss.item():10.10f}', f'val_loss: {validation_loss.item():10.10f}')
             w.writerow([i, training_loss.item(), validation_loss.item()])
@@ -311,6 +312,9 @@ class LSTM(nn.Module):
 
         # At the end of training, save the final model.
         torch.save(self, "last_training_model.pth")
+
+        # Update itself with BEST weights foundfor each layer.
+        self.load_state_dict(torch.load("best_model_state_dict.pth"))
 
         self.eval()
 
@@ -485,9 +489,6 @@ Runs the experiment itself.
     model = LSTM(input_size=1, hidden_layer_size=80, n_lstm_units=3, bidirectional=False,
                  output_size=1, training_batch_size=60, epochs=7500, device=device)
 
-    # Let's go fit! Comment if only loading pretrained model.
-    # model.fit(X, y)
-
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
     # EXPOENTES.
     hidden_layer_size = random.uniform(40, 200, 10).astype("int")
@@ -497,17 +498,23 @@ Runs the experiment itself.
     # funcao.
     parametros = {'hidden_layer_size': hidden_layer_size, 'n_lstm_units': n_lstm_units}
 
-    splitter = TimeSeriesSplitCV(n_splits=3,
-                                 training_percent=0.5,
+    splitter = TimeSeriesSplitCV(n_splits=2,
+                                 training_percent=0.8,
                                  blocking_split=False)
     regressor = model
     cv_search = \
         RandomizedSearchCV(estimator=regressor, cv=splitter,
                            param_distributions=parametros,
                            refit="MSE",
+                           n_iter=10,
                            verbose=1,
                            # n_jobs=4,
-                           scoring={"MSE": make_scorer(mean_squared_error, greater_is_better=True, needs_proba=False)})
+                           scoring={"MSE": make_scorer(mean_squared_error,
+                                                       greater_is_better=True,
+                                                       needs_proba=False)})
+
+    # Let's go fit! Comment if only loading pretrained model.
+    # model.fit(X, y)
 
     # Realizamos a busca atraves do treinamento
     cv_search.fit(X, y)
@@ -517,13 +524,12 @@ Runs the experiment itself.
     cv_dataframe_results = DataFrame.from_dict(cv_search.cv_results_)
     cv_dataframe_results.to_csv("cv_results.csv")
 
-    model = cv_search.best_estimator_
-
-    # =====================TEST=================================================
+    # =====================PREDICTION-TEST======================================
     # These arrays/tensors are only helpful for plotting the prediction.
     X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
     y_graphic = diff_pos.astype("float32")
 
+    model = cv_search.best_estimator_
     # model = torch.load("best_model.pth")
     model.to(device)
     yhat = []
