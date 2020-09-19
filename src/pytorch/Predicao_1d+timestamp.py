@@ -12,6 +12,7 @@ from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from skopt import BayesSearchCV
 from torch import nn
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 from tqdm import tqdm
@@ -265,7 +266,8 @@ class LSTM(nn.Module):
         w = csv.writer(f)
         w.writerow(["epoch", "training_loss", "val_loss"])
 
-        for i in tqdm(range(epochs)):
+        tqdm_bar = tqdm(range(epochs))
+        for i in tqdm_bar:
             training_loss = 0
             validation_loss = 0
             for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
@@ -305,7 +307,7 @@ class LSTM(nn.Module):
                 torch.save(self, "best_model.pth")
                 torch.save(self.state_dict(), "best_model_state_dict.pth")
 
-            print(f'\nepoch: {i:1} train_loss: {training_loss.item():10.10f}', f'val_loss: {validation_loss.item():10.10f}')
+            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
             w.writerow([i, training_loss.item(), validation_loss.item()])
             f.flush()
         f.close()
@@ -487,7 +489,7 @@ Runs the experiment itself.
     X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
     model = LSTM(input_size=1, hidden_layer_size=80, n_lstm_units=3, bidirectional=False,
-                 output_size=1, training_batch_size=60, epochs=7500, device=device)
+                 output_size=1, training_batch_size=60, epochs=400, device=device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
     # EXPOENTES.
@@ -503,24 +505,22 @@ Runs the experiment itself.
                                  blocking_split=False)
     regressor = model
     cv_search = \
-        RandomizedSearchCV(estimator=regressor, cv=splitter,
-                           param_distributions=parametros,
-                           refit="MSE",
-                           n_iter=10,
-                           verbose=1,
-                           # n_jobs=4,
-                           scoring={"MSE": make_scorer(mean_squared_error,
-                                                       greater_is_better=True,
-                                                       needs_proba=False)})
+        BayesSearchCV(estimator=regressor, cv=splitter,
+                      search_spaces=parametros,
+                      refit=True,
+                      n_iter=8,
+                      verbose=1,
+                      # n_jobs=4,
+                      scoring=make_scorer(mean_squared_error,
+                                          greater_is_better=True,
+                                          needs_proba=False))
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
 
     # Realizamos a busca atraves do treinamento
     cv_search.fit(X, y)
-
     print(cv_search.cv_results_)
-
     cv_dataframe_results = DataFrame.from_dict(cv_search.cv_results_)
     cv_dataframe_results.to_csv("cv_results.csv")
 
@@ -531,6 +531,7 @@ Runs the experiment itself.
 
     model = cv_search.best_estimator_
     # model = torch.load("best_model.pth")
+    # model.load_state_dict(torch.load("best_model_state_dict.pth"))
     model.to(device)
     yhat = []
     model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
