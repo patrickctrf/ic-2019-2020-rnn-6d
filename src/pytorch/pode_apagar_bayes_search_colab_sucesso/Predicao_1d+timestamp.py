@@ -4,10 +4,8 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose
+from numpy import arange, random
 from pandas import Series, DataFrame
-from ptk.timeseries import *
-from ptk.utils import *
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import RandomizedSearchCV
@@ -237,7 +235,7 @@ class LSTM(nn.Module):
         self.train()
         self.to(self.device)
         if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
-        y = y.to(self.device).view(-1, self.output_size)
+        y = y.to(self.device)
         # split into mini batches
         y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
 
@@ -459,15 +457,14 @@ Runs the experiment itself.
     :return: Error scores for each repeat.
     """
     # create data
-    raw_timestamp = range(-300, 300)
+    raw_timestamp = range(600)
     raw_timestamp = array(raw_timestamp) + numpy.random.rand(len(raw_timestamp))
-    diff_timestamp = difference(raw_timestamp, 1)
-    diff_timestamp = array(diff_timestamp)
-    raw_pos = [fake_position(i / 30) for i in raw_timestamp]
+    diff_timestamp = difference(numpy.array(raw_timestamp) + 2 * numpy.random.rand(raw_timestamp.shape[0]) - 1, 1)
+    raw_pos = [fake_position(i / 30) for i in range(-300, 300)]
     raw_pos = array(raw_pos)
     diff_pos = difference(raw_pos, 1)
     diff_pos = array(diff_pos)
-    raw_accel = [fake_acceleration(i / 30) for i in raw_timestamp]
+    raw_accel = [fake_acceleration(i / 30) for i in range(-300, 300)]
     raw_accel = array(raw_accel)
     diff_accel = difference(raw_accel, 1)
     diff_accel = array(diff_accel)
@@ -487,16 +484,15 @@ Runs the experiment itself.
     raw_accel = raw_accel.reshape(-1)
     diff_pos = diff_pos.reshape(-1)
 
-    # raw_accel
-    X, y = timeseries_dataloader(data_x=transpose(vstack((diff_timestamp, raw_accel))), data_y=diff_pos, enable_asymetrical=True)
+    X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
     model = LSTM(input_size=1, hidden_layer_size=80, n_lstm_units=3, bidirectional=False,
                  output_size=1, training_batch_size=60, epochs=7500, device=device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
     # EXPOENTES.
-    hidden_layer_size = random.uniform(40, 200, 20).astype("int")
-    n_lstm_units = array(range(1, 5))
+    hidden_layer_size = random.uniform(40, 200, 10).astype("int")
+    n_lstm_units = array(range(1, 4))
 
     # Une os parametros de entrada em um unico dicionario a ser passado para a
     # funcao.
@@ -521,7 +517,7 @@ Runs the experiment itself.
     # model.fit(X, y)
 
     # Realizamos a busca atraves do treinamento
-    cv_search.fit(X, y.reshape(-1, 1))
+    cv_search.fit(X, y)
     print(cv_search.cv_results_)
     cv_dataframe_results = DataFrame.from_dict(cv_search.cv_results_)
     cv_dataframe_results.to_csv("cv_results.csv")
@@ -568,3 +564,4 @@ if __name__ == '__main__':
     device = torch.device(dev)
 
     experiment(1)
+
