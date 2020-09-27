@@ -495,7 +495,7 @@ Runs the experiment itself.
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
     # EXPOENTES.
-    hidden_layer_size = random.uniform(40, 80, 20).astype("int")
+    hidden_layer_size = random.uniform(40, 200, 20).astype("int")
     n_lstm_units = arange(1, 4)
 
     # Une os parametros de entrada em um unico dicionario a ser passado para a
