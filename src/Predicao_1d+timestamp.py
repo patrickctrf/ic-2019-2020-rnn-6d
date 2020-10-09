@@ -172,6 +172,35 @@ inverse scale (yhat) too.
 
 class LSTM(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu")):
+        """
+This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
+receives sequences and returns the predcition at the end of each one.
+
+There is a fit() method to train this model according to the parameters given in
+the class initialization. It follows the sklearn header pattern.
+
+This is also an sklearn-like estimator and may be used with any sklearn method
+designed for classical estimators. But, when using GPU as PyTorch device, you
+CAN'T use multiple sklearn workers (n_jobs), beacuse it raises an serializtion
+error within CUDA.
+
+        :param input_size: Input dimension size (how many features).
+        :param hidden_layer_size: How many features there will be inside each LSTM.
+        :param output_size: Output dimension size (how many features).
+        :param n_lstm_units: How many stacked LSTM cells (or units).
+        :param epochs: The number of epochs to train. The final model after
+        train will be the one with best VALIDATION loss, not necessarily the
+        model found after whole "epochs" number.
+        :param training_batch_size: Size of each mini-batch during training
+        process. If number os samples is not a multiple of
+        "training_batch_size", the final batch will just be smaller than the
+        others.
+        :param validation_percent: The percentage of samples reserved for
+        validation (cross validation) during training inside fit() method.
+        :param bidirectional: If the LSTM units will be bidirectional.
+        :param device: PyTorch device, such as torch.device("cpu") or
+        torch.device("cuda:0").
+        """
         super().__init__()
         self.input_size = input_size
         self.hidden_layer_size = hidden_layer_size
@@ -203,6 +232,13 @@ class LSTM(nn.Module):
         return
 
     def forward(self, input_seq):
+        """
+Classic forward method of every PyTorch model, as fast as possible. Receives an
+input sequence and returns the prediction for the final step.
+
+        :param input_seq: Input seuqnece of the time series.
+        :return: The prediction in the end of the series.
+        """
         # (seq_len, batch, input_size), mas pode inverter o
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
@@ -232,6 +268,14 @@ class LSTM(nn.Module):
         return predictions
 
     def fit(self, X, y):
+        """
+This method contains the customized script for training this estimator. It must
+be adjusted whenever the network structure changes.
+
+        :param X: Input X data as numpy array. Each sample may have different length.
+        :param y: Respective output for each input sequence. Also numpy array
+        :return: Trained model with best validation loss found (it uses checkpoint).
+        """
         # =====DATA-PREPARATION=================================================
         # y numpy array values into torch tensors
         self.train()
@@ -343,7 +387,7 @@ Get parameters for this estimator.
 
     def predict(self, X):
         """
-Predict using this pytorch model. Useful for sklearn and/or mini-batch prediction.
+Predict using this pytorch model. Useful for sklearn search and/or mini-batch prediction.
 
         :param X: Input data of shape (n_samples, n_features).
         :return: The y predicted values.
@@ -495,7 +539,7 @@ Runs the experiment itself.
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
     # EXPOENTES.
-    hidden_layer_size = random.uniform(40, 200, 20).astype("int")
+    hidden_layer_size = random.uniform(40, 80, 20).astype("int")
     n_lstm_units = arange(1, 4)
 
     # Une os parametros de entrada em um unico dicionario a ser passado para a
