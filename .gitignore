@@ -5,3 +5,8 @@ Deep-Learning-Experiments/
 ./testes/lstm/Time-Series-Serie-Temporal/stateful_lstm/logs/events.out.tfevents.1595304645.patrick-Aspire-F5-573G
 ./TFC-TCC-Trabalho Final- Graduação/model_MLP.h5
 
+/src/dataset-room2_512_16/
+/src/x_data.npy
+/src/y_data.npy
+/src/x_data.npz
+/src/y_data.npz
