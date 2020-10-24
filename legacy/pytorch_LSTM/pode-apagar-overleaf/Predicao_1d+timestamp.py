@@ -4,18 +4,16 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez
-from pandas import Series, DataFrame, read_csv
+from numpy import arange
+from pandas import Series
 from ptk.timeseries import *
 from ptk.utils import *
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
-from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from skopt import BayesSearchCV
+from tensorflow.keras.layers import LSTM
 from torch import nn
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
-from torch.utils.data import DataLoader, random_split, Subset
 from tqdm import tqdm
 
 
@@ -118,12 +116,6 @@ it gets more general.
     return yhat + history[-interval]
 
 
-def find_nearest(array, value):
-    array = asarray(array)
-    idx = (absolute(array - value)).argmin()
-    return array[idx], idx
-
-
 # scale train and test data to [-1, 1]
 def scale(train, test):
     """
@@ -179,35 +171,6 @@ inverse scale (yhat) too.
 
 class LSTM(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu")):
-        """
-This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
-receives sequences and returns the predcition at the end of each one.
-
-There is a fit() method to train this model according to the parameters given in
-the class initialization. It follows the sklearn header pattern.
-
-This is also an sklearn-like estimator and may be used with any sklearn method
-designed for classical estimators. But, when using GPU as PyTorch device, you
-CAN'T use multiple sklearn workers (n_jobs), beacuse it raises an serializtion
-error within CUDA.
-
-        :param input_size: Input dimension size (how many features).
-        :param hidden_layer_size: How many features there will be inside each LSTM.
-        :param output_size: Output dimension size (how many features).
-        :param n_lstm_units: How many stacked LSTM cells (or units).
-        :param epochs: The number of epochs to train. The final model after
-        train will be the one with best VALIDATION loss, not necessarily the
-        model found after whole "epochs" number.
-        :param training_batch_size: Size of each mini-batch during training
-        process. If number os samples is not a multiple of
-        "training_batch_size", the final batch will just be smaller than the
-        others.
-        :param validation_percent: The percentage of samples reserved for
-        validation (cross validation) during training inside fit() method.
-        :param bidirectional: If the LSTM units will be bidirectional.
-        :param device: PyTorch device, such as torch.device("cpu") or
-        torch.device("cuda:0").
-        """
         super().__init__()
         self.input_size = input_size
         self.hidden_layer_size = hidden_layer_size
@@ -224,9 +187,6 @@ error within CUDA.
             self.num_directions = 1
         self.device = device
 
-        self.loss_function = None
-        self.optimizer = None
-
         self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
         self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
@@ -239,13 +199,6 @@ error within CUDA.
         return
 
     def forward(self, input_seq):
-        """
-Classic forward method of every PyTorch model, as fast as possible. Receives an
-input sequence and returns the prediction for the final step.
-
-        :param input_seq: Input seuqnece of the time series.
-        :return: The prediction in the end of the series.
-        """
         # (seq_len, batch, input_size), mas pode inverter o
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
@@ -275,20 +228,11 @@ input sequence and returns the prediction for the final step.
         return predictions
 
     def fit(self, X, y):
-        """
-This method contains the customized script for training this estimator. It must
-be adjusted whenever the network structure changes.
-
-        :param X: Input X data as numpy array. Each sample may have different length.
-        :param y: Respective output for each input sequence. Also numpy array
-        :return: Trained model with best validation loss found (it uses checkpoint).
-        """
         # =====DATA-PREPARATION=================================================
         # y numpy array values into torch tensors
         self.train()
-        self.to(self.device)
         if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
-        y = y.to(self.device).view(-1, self.output_size)
+        y = y.to(self.device)
         # split into mini batches
         y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
 
@@ -308,21 +252,20 @@ be adjusted whenever the network structure changes.
         X_batches = aux_list
         # =====fim-DATA-PREPARATION=============================================
 
+        loss_function = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
 
-        f = open("loss_log.csv", "w")
+        f = open("loss_log.csv", "a")
         w = csv.writer(f)
         w.writerow(["epoch", "training_loss", "val_loss"])
 
-        tqdm_bar = tqdm(range(epochs))
-        for i in tqdm_bar:
+        for i in tqdm(range(epochs)):
             training_loss = 0
             validation_loss = 0
-            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
-                self.optimizer.zero_grad()
+            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * self.validation_percent)], y_batches[:int(len(y_batches) * self.validation_percent)])):
+                optimizer.zero_grad()
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
@@ -331,20 +274,20 @@ be adjusted whenever the network structure changes.
 
                 y_pred = self(X)
 
-                single_loss = self.loss_function(y_pred, y)
+                single_loss = loss_function(y_pred, y)
                 single_loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 training_loss += single_loss
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * (1.0 - self.validation_percent)):], y_batches[int(len(y_batches) * (1.0 - self.validation_percent)):])):
+            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * self.validation_percent):], y_batches[int(len(y_batches) * self.validation_percent):])):
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
 
-                single_loss = self.loss_function(y_pred, y)
+                single_loss = loss_function(y_pred, y)
 
                 validation_loss += single_loss
             # Tira a media das losses.
@@ -356,9 +299,8 @@ be adjusted whenever the network structure changes.
                 best_validation_loss = validation_loss
                 # torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
                 torch.save(self, "best_model.pth")
-                torch.save(self.state_dict(), "best_model_state_dict.pth")
 
-            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
+            print(f'\nepoch: {i:1} train_loss: {training_loss.item():10.10f}', f'val_loss: {validation_loss.item():10.10f}')
             w.writerow([i, training_loss.item(), validation_loss.item()])
             f.flush()
         f.close()
@@ -366,92 +308,9 @@ be adjusted whenever the network structure changes.
         # At the end of training, save the final model.
         torch.save(self, "last_training_model.pth")
 
-        # Update itself with BEST weights foundfor each layer.
-        self.load_state_dict(torch.load("best_model_state_dict.pth"))
-
         self.eval()
 
-        # Returns the best model found so far.
-        return torch.load("best_model.pth")
-
-    def fit_dataloading(self):
-        """
-This method contains the customized script for training this estimator. Data is
-obtained with PyTorch's dataset and dataloader classes for memory efficiency
-when dealing with big datasets. Otherwise loading the whole dataset would
-overflow the memory.
-
-        :return: Trained model with best validation loss found (it uses checkpoint).
-        """
-        # =====DATA-PREPARATION=================================================
-        # y numpy array values into torch tensors
-        self.train()
-
-        epochs = self.epochs
-        best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
-
-        f = open("loss_log.csv", "w")
-        w = csv.writer(f)
-        w.writerow(["epoch", "training_loss", "val_loss"])
-
-        tqdm_bar = tqdm(range(epochs))
-        for i in tqdm_bar:
-            training_loss = 0
-            validation_loss = 0
-            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
-                self.optimizer.zero_grad()
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
-
-                y_pred = self(X)
-
-                single_loss = self.loss_function(y_pred, y)
-                single_loss.backward()
-                self.optimizer.step()
-
-                training_loss += single_loss
-            # Tira a media das losses.
-            training_loss = training_loss / (j + 1)
-
-            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * (1.0 - self.validation_percent)):], y_batches[int(len(y_batches) * (1.0 - self.validation_percent)):])):
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
-                y_pred = self(X)
-
-                single_loss = self.loss_function(y_pred, y)
-
-                validation_loss += single_loss
-            # Tira a media das losses.
-            validation_loss = validation_loss / (j + 1)
-
-            # Checkpoint to best models found.
-            if best_validation_loss > validation_loss:
-                # Update the new best loss.
-                best_validation_loss = validation_loss
-                # torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
-                torch.save(self, "best_model.pth")
-                torch.save(self.state_dict(), "best_model_state_dict.pth")
-
-            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
-            w.writerow([i, training_loss.item(), validation_loss.item()])
-            f.flush()
-        f.close()
-
-        # At the end of training, save the final model.
-        torch.save(self, "last_training_model.pth")
-
-        # Update itself with BEST weights foundfor each layer.
-        self.load_state_dict(torch.load("best_model_state_dict.pth"))
-
-        self.eval()
-
-        # Returns the best model found so far.
-        return torch.load("best_model.pth")
+        return self
 
     def get_params(self, *args, **kwargs):
         """
@@ -473,7 +332,7 @@ Get parameters for this estimator.
 
     def predict(self, X):
         """
-Predict using this pytorch model. Useful for sklearn search and/or mini-batch prediction.
+Predict using this pytorch model. Useful for sklearn and/or mini-batch prediction.
 
         :param X: Input data of shape (n_samples, n_features).
         :return: The y predicted values.
@@ -496,7 +355,7 @@ Predict using this pytorch model. Useful for sklearn search and/or mini-batch pr
                                 torch.zeros(self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size).to(self.device))
             y.append(self(X))
 
-        return torch.as_tensor(y).view(-1, self.output_size).detach().cpu().numpy()
+        return torch.as_tensor(y).view(-1, self.output_size)
 
     def score(self, X, y, **kwargs):
         """
@@ -579,92 +438,13 @@ Useful for updating params when 'set_params' is called.
         self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device),
                             torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size).to(self.device))
 
-    def __assemble_packed_seq__(self):
-        pass
+        # We predict using single input per time, so we let single batch cell
+        # ready here.
+        self.hidden_cell_prediction = (torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device),
+                                       torch.zeros(self.num_directions * self.n_lstm_units, 1, self.hidden_layer_size).to(self.device))
 
 
-def alinha_dataset_tum(imu_data, ground_truth, impossible_value=-444444):
-    """
-Funcao especifica para abrir e alinhar IMU e ground truth no formato de dataset
-da TUM. Mto chata mds
-
-    :param imu_data: Array-like (2D) with samples from IMU.
-    :param ground_truth: Array-like (2D) with samples from ground truth.
-    :param impossible_value: We define an impossible value for we to distinguish where we left unfilled elements.
-    :return: IMU original input and ground truth with unfilled values.
-    """
-    # Initialize aux matrix with impossible value.
-    aux_matrix = ones((imu_data.shape[0], ground_truth.shape[1])) * impossible_value
-
-    # Now we try to align ground truth with IMU timestamp (undersampling).
-    for sample in ground_truth:
-        _, index = find_nearest(imu_data[:, 0], sample[0])
-        aux_matrix[index] = sample
-
-    return imu_data, aux_matrix
-
-
-def format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, sampling_window_size=10):
-    """
-A utilidade desta função eh fazer o split do dataset no formato de serie
-temporal e convete-lo para arquivos numpy (NPZ), de forma que a classe que criamos
-para dataset no PyTorch possa opera-lo sem estouro de memoria RAM. Pois se
-abrissemos ele inteiro de uma vez, aconteceria overflow de memoria.
-
-O formato de dataset esperado eh o dataset visual-inercial da TUM.
-
-    :param dataset_directory: Diretorio onde se encontra o dataset (inclui o nome da sequencia).
-    :param sampling_window_size: O tamanho da janela de entrada na serie temporal (Se for simetrica. Do contrario, ignorado).
-    :param enable_asymetrical: Se a serie eh assimetrica.
-    :return: True se bem sucedido.
-    """
-    # Opening dataset.
-    input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
-    output_data = read_csv(dataset_directory + "/mav0/mocap0/data.csv").to_numpy()
-
-    # Precisamos restaurar o time par alinhar os dados depois do "diff"
-    original_ground_truth_timestamp = output_data[:, 0]
-
-    # Queremos apenas a VARIACAO de posicao a cada instante.
-    output_data = diff(output_data, axis=0)
-    # Restauramos a referencia de time original.
-    output_data[:, 0] = original_ground_truth_timestamp[1:]
-
-    # A IMU e o ground truth nao sao coletados ao mesmo tempo, precisamos alinhar.
-    x, y = alinha_dataset_tum(input_data, output_data)
-
-    # Depois de alinhado, timestamp nao nos importa mais. Vamos descartar
-    x = x[:, 1:]
-    y = y[:, 1:]
-
-    # Scaling data x
-    X_scaler = StandardScaler()
-    x = X_scaler.fit_transform(x)
-
-    # Fazemos o carregamento correto no formato de serie temporal
-    X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=enable_asymetrical, sampling_window_size=sampling_window_size)
-    # Um ajuste na dimensao do y pois prevemos so o proximo passo.
-    y = y.reshape(-1, 7)
-
-    # Agora jogamos fora os valores onde nao ha ground truth e serviram apenas
-    # para fazermos o alinhamento e o dataloader correto.
-    samples_validas = where(y > -44000, True, False)
-    X = X[samples_validas[:, 0]]
-    y = y[samples_validas[:, 0]]
-
-    # Scaling y data (only after taking out -444444 values)
-    y_scaler = MinMaxScaler(feature_range=(-1, 1))
-    y = y_scaler.fit_transform(y)
-
-    with open("x_data.npz", "wb") as x_file, open("y_data.npz", "wb") as y_file:
-        # Asterisco serve pra abrir a LISTA como se fosse *args.
-        # Dois asteriscos serviriam pra abrir um DICIONARIO como se fosse **kwargs.
-        savez(x_file, *X)
-        savez(y_file, *y)
-
-    return True
-
-
+# run a repeated experiment
 def experiment(repeats):
     """
 Runs the experiment itself.
@@ -672,77 +452,66 @@ Runs the experiment itself.
     :param repeats: Number of times to repeat the experiment. When we are trying to create a good network, it is reccomended to use 1.
     :return: Error scores for each repeat.
     """
+    # transform data to be stationary
+    raw_pos = [fake_position(i / 30) for i in range(-300, 300)]
+    diff_pos = difference(raw_pos, 1)
+    raw_accel = [fake_acceleration(i / 30) for i in range(-300, 300)]
+    diff_accel = difference(raw_accel, 1)
+    # diff_accel = numpy.array(raw_accel)
 
-    # # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    # format_dataset(dataset_directory="dataset-room2_512_16")
+    # raw_timestamp = range(len(raw_pos))
+    # # diff_timestamp = difference(numpy.array(raw_timestamp) + numpy.random.rand(len(raw_pos)), 1)
+    # diff_timestamp = array(raw_timestamp)
 
-    room2_tum_dataset = GenericDatasetFromFiles()
-    train_percentage = 0.8
-    train_dataset, test_dataset = Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage))), Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage), len(room2_tum_dataset)))
-    loader = DataLoader(room2_tum_dataset[0:2], batch_size=1, shuffle=False)
+    # testar com lstm BIDIRECIONAL
+    model = LSTM(input_size=1, hidden_layer_size=40, n_lstm_units=3, bidirectional=False,
+                 output_size=1, training_batch_size=60, epochs=2000, device=device)
 
-    model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=200, epochs=7500, device=device)
+    raw_pos = raw_pos[1:]
+    raw_accel = raw_accel[1:]
 
-    # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
-    # EXPOENTES.
-    hidden_layer_size = random.uniform(40, 80, 20).astype("int")
-    n_lstm_units = arange(1, 4)
+    raw_accel = array(raw_accel)
+    raw_pos = array(raw_pos)
+    diff_accel = array(diff_accel)
+    diff_pos = array(diff_pos)
 
-    # Une os parametros de entrada em um unico dicionario a ser passado para a
-    # funcao.
-    parametros = {'hidden_layer_size': hidden_layer_size, 'n_lstm_units': n_lstm_units}
+    X_scaler = StandardScaler()
+    raw_accel = X_scaler.fit_transform(raw_accel.reshape(-1, 1))
+    y_scaler = MinMaxScaler(feature_range=(-1, 1))
+    diff_pos = y_scaler.fit_transform(diff_pos.reshape(-1, 1))
 
-    splitter = TimeSeriesSplitCV(n_splits=2,
-                                 training_percent=0.8,
-                                 blocking_split=False)
-    regressor = model
-    cv_search = \
-        BayesSearchCV(estimator=regressor, cv=splitter,
-                      search_spaces=parametros,
-                      refit=True,
-                      n_iter=4,
-                      verbose=1,
-                      # n_jobs=4,
-                      scoring=make_scorer(mean_squared_error,
-                                          greater_is_better=False,
-                                          needs_proba=False))
+    raw_accel = raw_accel.reshape(-1)
+    diff_pos = diff_pos.reshape(-1)
 
-    # Let's go fit! Comment if only loading pretrained model.
-    model.fit_dataloading()
+    X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
-    # Realizamos a busca atraves do treinamento
-    # cv_search.fit(X, y.reshape(-1, 1))
-    # print(cv_search.cv_results_)
-    # cv_dataframe_results = DataFrame.from_dict(cv_search.cv_results_)
-    # cv_dataframe_results.to_csv("cv_results.csv")
+    # Invertendo para a sequencia ser DEcrescente.
+    # X = X[::-1]
+    # y = y[::-1]
 
-    # # =====================PREDICTION-TEST======================================
-    # # These arrays/tensors are only helpful for plotting the prediction.
-    # X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
-    # y_graphic = diff_pos.astype("float32")
-    #
-    # model = cv_search.best_estimator_
-    # # model = torch.load("best_model.pth")
-    # # model.load_state_dict(torch.load("best_model_state_dict.pth"))
-    # model.to(device)
-    # yhat = []
-    # model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
-    #                      torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
-    # model.eval()
-    # for X in X_graphic:
-    #     yhat.append(model(X.view(1, -1, 1)).detach().cpu().numpy())
-    # # from list to numpy array
-    # yhat = array(yhat).reshape(-1)
-    #
-    # # ======================PLOT================================================
-    # plt.close()
-    # plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
-    # plt.legend(['predict', 'reference'], loc='upper right')
-    # plt.savefig("output_reconstruction.png", dpi=800)
-    # # plt.show()
-    # rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
-    # print("RMSE trajetoria inteira: ", rmse)
+    # enabling CUDA
+    model.to(device)
+    # Let's go fit
+    model.fit(X, y)
+
+    X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
+    y_graphic = torch.from_numpy(diff_pos.astype("float32")).to(device)
+
+    model = torch.load("best_model.pth")
+    model.to(device)
+    yhat = []
+    model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
+                         torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
+    model.eval()
+    for X in X_graphic:
+        yhat.append(model(X.view(1, -1, 1)))
+
+    # report performance
+    plt.close()
+    plt.plot(range(len(yhat)), yhat, range(len(y)), y)
+    plt.savefig("output_train.png", dpi=800)
+    plt.show()
+    # rmse = mean_squared_error(raw_pos[:len(train_scaled)], predictions)
 
     error_scores = []
 
