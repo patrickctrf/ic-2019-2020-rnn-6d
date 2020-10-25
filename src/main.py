@@ -4,7 +4,7 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez
+from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto
 from pandas import Series, DataFrame, read_csv
 from ptk.timeseries import *
 from ptk.utils import *
@@ -604,7 +604,7 @@ da TUM. Mto chata mds
     return imu_data, aux_matrix
 
 
-def format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, sampling_window_size=10):
+def format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, sampling_window_size=10, file_format="npy"):
     """
 A utilidade desta função eh fazer o split do dataset no formato de serie
 temporal e convete-lo para arquivos numpy (NPZ), de forma que a classe que criamos
@@ -616,7 +616,8 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     :param dataset_directory: Diretorio onde se encontra o dataset (inclui o nome da sequencia).
     :param sampling_window_size: O tamanho da janela de entrada na serie temporal (Se for simetrica. Do contrario, ignorado).
     :param enable_asymetrical: Se a serie eh assimetrica.
-    :return: True se bem sucedido.
+    :return: Arrays X e y completos.
+    :param file_format: NPY (deafult): 1 Arquivo para X e outro para Y. NPZ: Cada linha das matrizes X e Y gera 1 arquivo dentro dos NPZ de saida.
     """
     # Opening dataset.
     input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
@@ -656,13 +657,22 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     y_scaler = MinMaxScaler(feature_range=(-1, 1))
     y = y_scaler.fit_transform(y)
 
-    with open("x_data.npz", "wb") as x_file, open("y_data.npz", "wb") as y_file:
-        # Asterisco serve pra abrir a LISTA como se fosse *args.
-        # Dois asteriscos serviriam pra abrir um DICIONARIO como se fosse **kwargs.
-        savez(x_file, *X)
-        savez(y_file, *y)
+    if file_format.lower() == "npy":
+        print("Saving NPY files...")
+        with open("x_data.npy", "wb") as x_file, open("y_data.npy", "wb") as y_file:
+            save(x_file, X)
+            save(y_file, y)
+        print("Saving NPY files Done.")
+    else:
+        print("Saving NPZ files...")
+        with open("x_data.npz", "wb") as x_file, open("y_data.npz", "wb") as y_file:
+            # Asterisco serve pra abrir a LISTA como se fosse *args.
+            # Dois asteriscos serviriam pra abrir um DICIONARIO como se fosse **kwargs.
+            savez(x_file, *X)
+            savez(y_file, *y)
+        print("Saving NPZ files Done.")
 
-    return True
+    return X, y
 
 
 def experiment(repeats):
@@ -674,11 +684,27 @@ Runs the experiment itself.
     """
 
     # # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    # format_dataset(dataset_directory="dataset-room2_512_16")
+    # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPY")
 
     room2_tum_dataset = GenericDatasetFromFiles()
+
+    try:
+        os.mkdir("tmp")
+    except OSError:
+        print("Diretorio ja existe")
+    x_list = []
+    for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
+        mmap_array = memmap("tmp/arr_" + str(i) + ".arr", dtype=x.dtype, mode='w+', shape=x.shape)
+        copyto(mmap_array, x)
+        x_list.append(mmap_array)
+
+    X = array(x_list)
+    y = load("y_data.npy", mmap_mode="r+", allow_pickle=True)
+
+    room2_tum_dataset = GenericDatasetFromFiles(mmap_mode="r+")
     train_percentage = 0.8
-    train_dataset, test_dataset = Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage))), Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage), len(room2_tum_dataset)))
+    train_dataset, test_dataset = Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage))), Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage),
+                                                                                                                                                    len(room2_tum_dataset)))
     loader = DataLoader(room2_tum_dataset[0:2], batch_size=1, shuffle=False)
 
     model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
@@ -709,7 +735,8 @@ Runs the experiment itself.
                                           needs_proba=False))
 
     # Let's go fit! Comment if only loading pretrained model.
-    model.fit_dataloading()
+    model.fit(X, y)
+    # model.fit_dataloading()
 
     # Realizamos a busca atraves do treinamento
     # cv_search.fit(X, y.reshape(-1, 1))
