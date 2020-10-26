@@ -686,31 +686,14 @@ Runs the experiment itself.
     # # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
     # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPY")
 
-    room2_tum_dataset = GenericDatasetFromFiles(mmap_mode="r+")
-
-    try:
-        os.mkdir("tmp")
-    except OSError:
-        print("Diretorio ja existe")
-
-    x_list = []
-    print("Mapeando dataset em disco (memmap numpy).")
-    for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
-        # Se for criar os arrays pela primeira vez, use estas instrucoes.
-        mmap_array = memmap("tmp/arr_" + str(i) + ".arr", dtype=x.dtype, mode='w+', shape=x.shape)
-        copyto(mmap_array, x)
-        x_list.append(mmap_array)
-
-        # Se os arrays ja estiverem criados, use so isto no FOR
-        # x_list.append(memmap("tmp/arr_" + str(i) + ".arr", dtype=x.dtype, mode='r+', shape=x.shape))
-
-    X = array(x_list, dtype=object)
-    y = load("y_data.npy", mmap_mode="r+", allow_pickle=True)
-
-    room2_tum_dataset = GenericDatasetFromFiles(mmap_mode="r+")
+    room2_tum_dataset = GenericDatasetFromFiles(convert_first=True)
     train_percentage = 0.8
     train_dataset, test_dataset = Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage))), Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage),
                                                                                                                                                     len(room2_tum_dataset)))
+
+    loader = iter(PackingSequenceDataloader(room2_tum_dataset))
+
+    next(loader)
 
     model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
                  output_size=7, training_batch_size=200, epochs=7500, device=device)
@@ -740,8 +723,8 @@ Runs the experiment itself.
                                           needs_proba=False))
 
     # Let's go fit! Comment if only loading pretrained model.
-    model.fit(X, y)
-    # model.fit_dataloading()
+    # model.fit(X, y)
+    model.fit_dataloading()
 
     # Realizamos a busca atraves do treinamento
     # cv_search.fit(X, y.reshape(-1, 1))
