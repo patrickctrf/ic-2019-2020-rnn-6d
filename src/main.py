@@ -13,7 +13,7 @@ from sklearn.metrics import make_scorer
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from skopt import BayesSearchCV
-from torch import nn
+from torch import nn, stack
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 from torch.utils.data import DataLoader, random_split, Subset
 from tqdm import tqdm
@@ -215,6 +215,7 @@ error within CUDA.
         self.training_batch_size = training_batch_size
         self.epochs = epochs
         self.validation_percent = validation_percent
+        self.train_percentage = 1 - self.validation_percent
         self.n_lstm_units = n_lstm_units
         if bidirectional:
             self.bidirectional = 1
@@ -383,9 +384,15 @@ overflow the memory.
 
         :return: Trained model with best validation loss found (it uses checkpoint).
         """
-        # =====DATA-PREPARATION=================================================
-        # y numpy array values into torch tensors
         self.train()
+        # =====DATA-PREPARATION=================================================
+        room2_tum_dataset = GenericDatasetFromFiles(convert_first=True, device=self.device)
+        train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
+        val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
+
+        train_loader = PackingSequenceDataloader(train_dataset, batch_size=self.training_batch_size)
+        val_loader = PackingSequenceDataloader(val_dataset, batch_size=self.training_batch_size)
+        # =====fim-DATA-PREPARATION=============================================
 
         epochs = self.epochs
         best_validation_loss = 999999
@@ -400,7 +407,9 @@ overflow the memory.
         for i in tqdm_bar:
             training_loss = 0
             validation_loss = 0
-            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
+            for j, (X, y) in enumerate(train_loader):
+                y = stack(y).to(self.device)
+
                 self.optimizer.zero_grad()
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
@@ -418,7 +427,8 @@ overflow the memory.
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * (1.0 - self.validation_percent)):], y_batches[int(len(y_batches) * (1.0 - self.validation_percent)):])):
+            for j, (X, y) in enumerate(val_loader):
+                y = stack(y).to(self.device)
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
@@ -684,19 +694,11 @@ Runs the experiment itself.
     """
 
     # # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPY")
+    X, y = format_dataset(dataset_directory="dataset-room2_512_16", sampling_window_size=2, enable_asymetrical=False, file_format="NPY")
 
-    room2_tum_dataset = GenericDatasetFromFiles(convert_first=True)
-    train_percentage = 0.8
-    train_dataset, test_dataset = Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage))), Subset(room2_tum_dataset, range(int(len(room2_tum_dataset) * train_percentage),
-                                                                                                                                                    len(room2_tum_dataset)))
-
-    loader = iter(PackingSequenceDataloader(room2_tum_dataset))
-
-    next(loader)
-
-    model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=200, epochs=7500, device=device)
+    model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=False,
+                 output_size=7, training_batch_size=64, epochs=7500, device=device)
+    model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
     # EXPOENTES.
