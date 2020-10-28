@@ -215,7 +215,6 @@ error within CUDA.
         self.training_batch_size = training_batch_size
         self.epochs = epochs
         self.validation_percent = validation_percent
-        self.train_percentage = 1 - self.validation_percent
         self.n_lstm_units = n_lstm_units
         if bidirectional:
             self.bidirectional = 1
@@ -224,6 +223,11 @@ error within CUDA.
             self.bidirectional = 0
             self.num_directions = 1
         self.device = device
+
+        # Proporcao entre dados de treino e de validacao
+        self.train_percentage = 1 - self.validation_percent
+        # Se usaremos packed_sequences no LSTM ou nao
+        self.packing_sequence = False
 
         self.loss_function = None
         self.optimizer = None
@@ -251,7 +255,7 @@ input sequence and returns the prediction for the final step.
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
 
-        if self.training is True:
+        if self.packing_sequence is True:
             # Para desempacotarmos a packed sequence, usamos esta funcao, que
             # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
             # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
@@ -287,6 +291,7 @@ be adjusted whenever the network structure changes.
         # =====DATA-PREPARATION=================================================
         # y numpy array values into torch tensors
         self.train()
+        self.packing_sequence = True
         self.to(self.device)
         if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
         y = y.to(self.device).view(-1, self.output_size)
@@ -364,6 +369,9 @@ be adjusted whenever the network structure changes.
             f.flush()
         f.close()
 
+        self.eval()
+        self.packing_sequence = False
+
         # At the end of training, save the final model.
         torch.save(self, "last_training_model.pth")
 
@@ -386,12 +394,12 @@ overflow the memory.
         """
         self.train()
         # =====DATA-PREPARATION=================================================
-        room2_tum_dataset = GenericDatasetFromFiles(convert_first=True, device=self.device)
+        room2_tum_dataset = GenericDatasetFromFiles(data_path="../drive/My Drive/PODE APAGAR/dataset-tum-room2/", convert_first=False, device=self.device)
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
-        train_loader = PackingSequenceDataloader(train_dataset, batch_size=self.training_batch_size)
-        val_loader = PackingSequenceDataloader(val_dataset, batch_size=self.training_batch_size)
+        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
         # =====fim-DATA-PREPARATION=============================================
 
         epochs = self.epochs
@@ -407,10 +415,17 @@ overflow the memory.
         for i in tqdm_bar:
             training_loss = 0
             validation_loss = 0
+            self.optimizer.zero_grad()
             for j, (X, y) in enumerate(train_loader):
-                y = stack(y).to(self.device)
+                print(i)
+                X = X.to(self.device)
+                y = y.to(self.device)
 
-                self.optimizer.zero_grad()
+                # Fazemos a otimizacao a cada MINI BATCH size
+                if (j + 1) % self.training_batch_size == 0:
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
@@ -419,16 +434,24 @@ overflow the memory.
 
                 y_pred = self(X)
 
+                # Repare que NAO ESTAMOS acumulando a LOSS.
                 single_loss = self.loss_function(y_pred, y)
+                # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 single_loss.backward()
-                self.optimizer.step()
 
                 training_loss += single_loss
+
+            # O ultimo batch pode nao ter o mesmo tamanho que os demais e nao entrar no "if"
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
             for j, (X, y) in enumerate(val_loader):
-                y = stack(y).to(self.device)
+                X = X.to(self.device)
+                y = y.to(self.device)
+
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
@@ -451,6 +474,8 @@ overflow the memory.
             w.writerow([i, training_loss.item(), validation_loss.item()])
             f.flush()
         f.close()
+
+        self.eval()
 
         # At the end of training, save the final model.
         torch.save(self, "last_training_model.pth")
@@ -693,11 +718,11 @@ Runs the experiment itself.
     :return: Error scores for each repeat.
     """
 
-    # # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    X, y = format_dataset(dataset_directory="dataset-room2_512_16", sampling_window_size=2, enable_asymetrical=False, file_format="NPY")
+    # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
+    # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPZ")
 
-    model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=64, epochs=7500, device=device)
+    model = LSTM(input_size=6, hidden_layer_size=80, n_lstm_units=1, bidirectional=True,
+                 output_size=7, training_batch_size=200, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
