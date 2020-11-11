@@ -400,11 +400,11 @@ overflow the memory.
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
-        train_loader = PackingSequenceDataloader(train_dataset, batch_size=self.training_batch_size, shuffle=True)
-        val_loader = PackingSequenceDataloader(val_dataset, batch_size=self.training_batch_size, shuffle=True)
+        train_loader = PackingSequenceDataloader(train_dataset, batch_size=4, shuffle=True)
+        val_loader = PackingSequenceDataloader(val_dataset, batch_size=2, shuffle=True)
 
-        train_manager = DataManager(train_loader, device=self.device)
-        val_manager = DataManager(val_loader, device=self.device)
+        train_manager = DataManager(train_loader, device=self.device, buffer_size=3)
+        val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
 
         # Se voce nao der start() nas Threads, ficara travado!
         train_manager.start()
@@ -425,10 +425,10 @@ overflow the memory.
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
-            for j, (X, y) in enumerate(train_manager):
+            for j, (X, y) in tqdm(enumerate(train_manager), desc="treino"):
 
                 # Fazemos a otimizacao a cada MINI BATCH size
-                if j > 0 or (j + 1) % self.training_batch_size == 0:
+                if (j + 1) % self.training_batch_size == 0:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
@@ -454,7 +454,7 @@ overflow the memory.
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            for j, (X, y) in enumerate(val_manager):
+            for j, (X, y) in tqdm(enumerate(val_manager), desc="validacao"):
 
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
@@ -726,7 +726,7 @@ Runs the experiment itself.
     # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPZ")
 
     model = LSTM(input_size=6, hidden_layer_size=80, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=10, epochs=10, device=device)
+                 output_size=7, training_batch_size=32, epochs=5, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
