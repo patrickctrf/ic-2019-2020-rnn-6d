@@ -4,7 +4,7 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto
+from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate
 from pandas import Series, DataFrame, read_csv
 from ptk.timeseries import *
 from ptk.utils import *
@@ -116,12 +116,6 @@ it gets more general.
     :return: An output representing the current value of the measuring being tracked, no more the difference of this value.
     """
     return yhat + history[-interval]
-
-
-def find_nearest(array, value):
-    array = asarray(array)
-    idx = (absolute(array - value)).argmin()
-    return array[idx], idx
 
 
 # scale train and test data to [-1, 1]
@@ -400,15 +394,11 @@ overflow the memory.
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
-        train_loader = PackingSequenceDataloader(train_dataset, batch_size=4, shuffle=True)
-        val_loader = PackingSequenceDataloader(val_dataset, batch_size=2, shuffle=True)
+        # train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        # val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
 
-        train_manager = DataManager(train_loader, device=self.device, buffer_size=3)
-        val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
-
-        # Se voce nao der start() nas Threads, ficara travado!
-        train_manager.start()
-        val_manager.start()
+        train_loader = PackingSequenceDataloader(train_dataset, batch_size=8, shuffle=True)
+        val_loader = PackingSequenceDataloader(val_dataset, batch_size=8, shuffle=True)
         # =====fim-DATA-PREPARATION=============================================
 
         epochs = self.epochs
@@ -422,10 +412,12 @@ overflow the memory.
 
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=3)
+            val_manager = DataManager(val_loader, device=self.device, buffer_size=3)
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
-            for j, (X, y) in tqdm(enumerate(train_manager), desc="treino"):
+            for j, (X, y) in tqdm(enumerate(train_manager), desc="treino", total=len(train_manager)):
 
                 # Fazemos a otimizacao a cada MINI BATCH size
                 if (j + 1) % self.training_batch_size == 0:
@@ -454,8 +446,7 @@ overflow the memory.
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            for j, (X, y) in tqdm(enumerate(val_manager), desc="validacao"):
-
+            for j, (X, y) in tqdm(enumerate(val_manager), desc="validacao", total=len(val_manager)):
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
@@ -662,13 +653,27 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
     output_data = read_csv(dataset_directory + "/mav0/mocap0/data.csv").to_numpy()
 
-    # Precisamos restaurar o time par alinhar os dados depois do "diff"
+    # Precisamos restaurar o time para alinhar os dados depois do "diff"
     original_ground_truth_timestamp = output_data[:, 0]
 
     # Queremos apenas a VARIACAO de posicao a cada instante.
     output_data = diff(output_data, axis=0)
     # Restauramos a referencia de time original.
     output_data[:, 0] = original_ground_truth_timestamp[1:]
+
+    # features without timestamp (we do not scale timestamp)
+    input_features = input_data[:, 1:]
+    output_features = output_data[:, 1:]
+
+    # Scaling data
+    input_scaler = StandardScaler()
+    input_features = input_scaler.fit_transform(input_features)
+    output_scaler = MinMaxScaler()
+    output_features = output_scaler.fit_transform(output_features)
+
+    # Replacing scaled data
+    input_data[:, 1:] = input_features
+    output_data[:, 1:] = output_features
 
     # A IMU e o ground truth nao sao coletados ao mesmo tempo, precisamos alinhar.
     x, y = alinha_dataset_tum(input_data, output_data)
@@ -677,24 +682,40 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     x = x[:, 1:]
     y = y[:, 1:]
 
-    # Scaling data x
-    X_scaler = StandardScaler()
-    x = X_scaler.fit_transform(x)
+    # Divido x e y em diferentes conjuntos de mesmo tamanho e alinhados
+    x_chunks = split_into_chunks(x, 200)
+    y_chunks = split_into_chunks(y, 200)
 
-    # Fazemos o carregamento correto no formato de serie temporal
-    X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=enable_asymetrical, sampling_window_size=sampling_window_size)
-    # Um ajuste na dimensao do y pois prevemos so o proximo passo.
-    y = y.reshape(-1, 7)
+    # Vou concatenando os dados ja "splittados" nestes arrays
+    X_array = None
+    y_array = None
 
-    # Agora jogamos fora os valores onde nao ha ground truth e serviram apenas
-    # para fazermos o alinhamento e o dataloader correto.
-    samples_validas = where(y > -44000, True, False)
-    X = X[samples_validas[:, 0]]
-    y = y[samples_validas[:, 0]]
+    # A partir daqui, o bagulho fica louco. Vou dividir a entrada em pequenos
+    # datasets e fazer o split deles individualente para ter mais granularidade
+    # no tamanho das sequencias e nao resultar tambem em senquencias muito
+    # longas (com o tamanho do dataset inteiro).
+    for x, y in tqdm(list(zip(x_chunks, y_chunks)), desc="Split do dataset"):
+        # Fazemos o carregamento correto no formato de serie temporal
+        X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=enable_asymetrical, sampling_window_size=sampling_window_size)
+        # Um ajuste na dimensao do y pois prevemos so o proximo passo.
+        y = y.reshape(-1, 7)
 
-    # Scaling y data (only after taking out -444444 values)
-    y_scaler = MinMaxScaler(feature_range=(-1, 1))
-    y = y_scaler.fit_transform(y)
+        # Agora jogamos fora os valores onde nao ha ground truth e serviram apenas
+        # para fazermos o alinhamento e o dataloader correto.
+        samples_validas = where(y > -44000, True, False)
+        X = X[samples_validas[:, 0]]
+        y = y[samples_validas[:, 0]]
+
+        if X_array is None and y_array is None:
+            X_array = X.copy()
+            y_array = y.copy()
+        else:
+            X_array = concatenate((X_array, X.copy()))
+            y_array = concatenate((y_array, y.copy()))
+
+    # Apena para manter o padrao de nomenclatura
+    X = X_array
+    y = y_array
 
     if file_format.lower() == "npy":
         print("Saving NPY files...")
