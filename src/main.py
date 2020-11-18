@@ -510,6 +510,7 @@ Predict using this pytorch model. Useful for sklearn search and/or mini-batch pr
         """
         # This method (predict) is intended to be used within training procces.
         self.eval()
+        self.packing_sequence = False
 
         # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
         # lista (que nao reclama de tamanhos diferentes em seus elementos).
@@ -671,7 +672,7 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     output_scaler = MinMaxScaler()
     output_features = output_scaler.fit_transform(output_features)
 
-    # Replacing scaled data
+    # Replacing scaled data (we kept the original timestamp)
     input_data[:, 1:] = input_features
     output_data[:, 1:] = output_features
 
@@ -746,8 +747,8 @@ Runs the experiment itself.
     # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
     # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPZ")
 
-    model = LSTM(input_size=6, hidden_layer_size=80, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=32, epochs=5, device=device)
+    model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
+                 output_size=7, training_batch_size=32, epochs=300, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
@@ -776,7 +777,7 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    model.fit_dataloading()
+    # model.fit_dataloading()
 
     # Realizamos a busca atraves do treinamento
     # cv_search.fit(X, y.reshape(-1, 1))
@@ -784,32 +785,57 @@ Runs the experiment itself.
     # cv_dataframe_results = DataFrame.from_dict(cv_search.cv_results_)
     # cv_dataframe_results.to_csv("cv_results.csv")
 
-    # # =====================PREDICTION-TEST======================================
-    # # These arrays/tensors are only helpful for plotting the prediction.
-    # X_graphic = torch.from_numpy(raw_accel.astype("float32")).to(device)
-    # y_graphic = diff_pos.astype("float32")
-    #
+    # =====================PREDICTION-TEST======================================
+    dataset_directory="dataset-room2_512_16"
+
+    # Opening dataset.
+    input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
+    output_data = read_csv(dataset_directory + "/mav0/mocap0/data.csv").to_numpy()
+
+    # Precisamos restaurar o time para alinhar os dados depois do "diff"
+    original_ground_truth_timestamp = output_data[:, 0]
+
+    # Queremos apenas a VARIACAO de posicao a cada instante.
+    output_data = diff(output_data, axis=0)
+    # Restauramos a referencia de time original.
+    output_data[:, 0] = original_ground_truth_timestamp[1:]
+
+    # features without timestamp (we do not scale timestamp)
+    input_features = input_data[:, 1:]
+    output_features = output_data[:, 1:]
+
+    # Scaling data
+    input_scaler = StandardScaler()
+    input_features = input_scaler.fit_transform(input_features)
+    output_scaler = MinMaxScaler()
+    output_features = output_scaler.fit_transform(output_features)
+
+    # These arrays/tensors are only helpful for plotting the prediction.
+    X_graphic = torch.from_numpy(input_features.astype("float32")).to(device)
+    y_graphic = output_features.astype("float32")
+
     # model = cv_search.best_estimator_
-    # # model = torch.load("best_model.pth")
-    # # model.load_state_dict(torch.load("best_model_state_dict.pth"))
-    # model.to(device)
-    # yhat = []
-    # model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
-    #                      torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
-    # model.eval()
-    # for X in X_graphic:
-    #     yhat.append(model(X.view(1, -1, 1)).detach().cpu().numpy())
-    # # from list to numpy array
-    # yhat = array(yhat).reshape(-1)
-    #
-    # # ======================PLOT================================================
-    # plt.close()
-    # plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
-    # plt.legend(['predict', 'reference'], loc='upper right')
-    # plt.savefig("output_reconstruction.png", dpi=800)
-    # # plt.show()
-    # rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
-    # print("RMSE trajetoria inteira: ", rmse)
+    model = torch.load("best_model.pth")
+    # model.load_state_dict(torch.load("best_model_state_dict.pth"))
+    model.to(device)
+    model.packing_sequence = False
+    yhat = []
+    model.hidden_cell = (torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device),
+                         torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
+    model.eval()
+    for X in X_graphic:
+        yhat.append(model(X.view(1, -1, 1)).detach().cpu().numpy())
+    # from list to numpy array
+    yhat = array(yhat).reshape(-1)
+
+    # ======================PLOT================================================
+    plt.close()
+    plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
+    plt.legend(['predict', 'reference'], loc='upper right')
+    plt.savefig("output_reconstruction.png", dpi=800)
+    # plt.show()
+    rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
+    print("RMSE trajetoria inteira: ", rmse)
 
     error_scores = []
 
