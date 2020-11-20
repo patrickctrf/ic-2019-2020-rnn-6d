@@ -657,6 +657,9 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     # Precisamos restaurar o time para alinhar os dados depois do "diff"
     original_ground_truth_timestamp = output_data[:, 0]
 
+    # inutil agora, mas deixarei aqui pra nao ter que refazer depois
+    original_imu_timestamp = input_data[:, 0]
+
     # Queremos apenas a VARIACAO de posicao a cada instante.
     output_data = diff(output_data, axis=0)
     # Restauramos a referencia de time original.
@@ -795,6 +798,9 @@ Runs the experiment itself.
     # Precisamos restaurar o time para alinhar os dados depois do "diff"
     original_ground_truth_timestamp = output_data[:, 0]
 
+    # inutil agora, mas deixarei aqui pra nao ter que refazer depois
+    original_imu_timestamp = input_data[:, 0]
+
     # Queremos apenas a VARIACAO de posicao a cada instante.
     output_data = diff(output_data, axis=0)
     # Restauramos a referencia de time original.
@@ -824,18 +830,20 @@ Runs the experiment itself.
                          torch.zeros(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size).to(model.device))
     model.eval()
     for X in X_graphic:
-        yhat.append(model(X.view(1, -1, 1)).detach().cpu().numpy())
+        yhat.append(model(X.view(1, -1, 6)).detach().cpu().numpy())
     # from list to numpy array
-    yhat = array(yhat).reshape(-1)
+    yhat = array(yhat).reshape(-1, 7)
 
     # ======================PLOT================================================
-    plt.close()
-    plt.plot(range(yhat.shape[0]), yhat, range(y_graphic.shape[0]), y_graphic)
-    plt.legend(['predict', 'reference'], loc='upper right')
-    plt.savefig("output_reconstruction.png", dpi=800)
-    # plt.show()
-    rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
-    print("RMSE trajetoria inteira: ", rmse)
+    dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
+    for i, dim_name in enumerate(dimensoes):
+        plt.close()
+        plt.plot(original_imu_timestamp, yhat[:, i], original_ground_truth_timestamp[1:], y_graphic[:, i])
+        plt.legend(['predict', 'reference'], loc='upper right')
+        plt.savefig(dim_name + ".png", dpi=200)
+        plt.show()
+    # rmse = mean_squared_error(yhat, y_graphic) ** 1 / 2
+    # print("RMSE trajetoria inteira: ", rmse)
 
     error_scores = []
 
