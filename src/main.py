@@ -83,6 +83,18 @@ It is supposed to be the input for the neural network.
     return -((x ** 2 - 2) * sin(x) + 2 * x * cos(x)) / x ** 3
 
 
+def plot_csv(csv_path="dataset-room2_512_16/mav0/mocap0/data.csv"):
+    output_data = read_csv(csv_path)
+
+    for key in output_data.columns[1:]:
+        plt.close()
+        output_data.plot(kind='scatter', x=output_data.columns[0], y=key, color='red')
+        plt.show()
+        plt.savefig(key + ".png", dpi=200)
+
+    return
+
+
 def difference(dataset, interval=1):
     """
 For a given dataset, calculates the difference between each sample and the
@@ -654,6 +666,7 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
     output_data = read_csv(dataset_directory + "/mav0/mocap0/data.csv").to_numpy()
 
+    # ===============DIFF=======================================================
     # Precisamos restaurar o time para alinhar os dados depois do "diff"
     original_ground_truth_timestamp = output_data[:, 0]
 
@@ -664,6 +677,7 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     output_data = diff(output_data, axis=0)
     # Restauramos a referencia de time original.
     output_data[:, 0] = original_ground_truth_timestamp[1:]
+    # ===============fim-de-DIFF================================================
 
     # features without timestamp (we do not scale timestamp)
     input_features = input_data[:, 1:]
@@ -675,7 +689,7 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     output_scaler = MinMaxScaler()
     output_features = output_scaler.fit_transform(output_features)
 
-    # Replacing scaled data (we kept the original timestamp)
+    # Replacing scaled data (we kept the original TIMESTAMP)
     input_data[:, 1:] = input_features
     output_data[:, 1:] = output_features
 
@@ -789,7 +803,7 @@ Runs the experiment itself.
     # cv_dataframe_results.to_csv("cv_results.csv")
 
     # =====================PREDICTION-TEST======================================
-    dataset_directory="dataset-room2_512_16"
+    dataset_directory = "dataset-room2_512_16"
 
     # Opening dataset.
     input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
@@ -851,6 +865,9 @@ Runs the experiment itself.
 
 
 if __name__ == '__main__':
+
+    plot_csv()
+
     if torch.cuda.is_available():
         dev = "cuda:0"
         print("Usando GPU")
