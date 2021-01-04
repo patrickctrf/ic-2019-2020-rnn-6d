@@ -89,8 +89,8 @@ def plot_csv(csv_path="dataset-room2_512_16/mav0/mocap0/data.csv"):
     for key in output_data.columns[1:]:
         plt.close()
         output_data.plot(kind='scatter', x=output_data.columns[0], y=key, color='red')
-        plt.show()
         plt.savefig(key + ".png", dpi=200)
+        # plt.show()
 
     return
 
@@ -815,8 +815,21 @@ Runs the experiment itself.
     # inutil agora, mas deixarei aqui pra nao ter que refazer depois
     original_imu_timestamp = input_data[:, 0]
 
+    plt.close()
+    plt.plot(output_data[:, 1])
+    plt.show()
+
+    plt.close()
+    plt.plot(output_data[1:, 1] - output_data[:-1, 1])
+    plt.show()
+
     # Queremos apenas a VARIACAO de posicao a cada instante.
     output_data = diff(output_data, axis=0)
+
+    plt.close()
+    plt.plot(output_data[:, 1])
+    plt.show()
+
     # Restauramos a referencia de time original.
     output_data[:, 0] = original_ground_truth_timestamp[1:]
 
