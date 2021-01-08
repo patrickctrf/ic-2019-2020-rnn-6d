@@ -2,6 +2,7 @@ import csv
 import glob
 from math import sin, cos
 import os
+from time import sleep, time
 
 import numpy
 import torch
@@ -784,7 +785,7 @@ Runs the experiment itself.
     # return
 
     model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=32, epochs=1, device=device)
+                 output_size=7, training_batch_size=32, epochs=100, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
@@ -907,5 +908,24 @@ if __name__ == '__main__':
         dev = "cpu"
         print("Usando CPU")
     device = torch.device(dev)
+
+    print("abrindo dataset")
+    t0 = time()
+    room2_tum_dataset = GenericDatasetFromFiles(data_path="../drive/My Drive/PODE APAGAR/dataset-tum-room2/", convert_first=True, device=device)
+    print("tempo abrindo dataset:", time() - t0)
+
+    print("abrindo loader")
+    train_loader = PackingSequenceDataloader(room2_tum_dataset, batch_size=128, shuffle=True)
+    loader_iterable = iter(train_loader)
+
+    print("abrindo manager")
+    train_manager = iter(DataManager(train_loader, device=device, buffer_size=3))
+
+    while True:
+        print("esperando")
+        sleep(1)
+        t0 = time()
+        x = next(train_manager)
+        print("tempo de resposta manager:", time() - t0)
 
     experiment(1)
