@@ -4,7 +4,7 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate
+from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array
 from pandas import Series, DataFrame, read_csv
 from ptk.timeseries import *
 from ptk.utils import *
@@ -108,7 +108,7 @@ previous one, for both input and output values.
     for i in range(interval, len(dataset)):
         value = dataset[i] - dataset[i - interval]
         diff.append(value)
-    return Series(diff)
+    return array(diff)
 
 
 # invert differenced value
@@ -657,99 +657,107 @@ abrissemos ele inteiro de uma vez, aconteceria overflow de memoria.
 O formato de dataset esperado eh o dataset visual-inercial da TUM.
 
     :param dataset_directory: Diretorio onde se encontra o dataset (inclui o nome da sequencia).
-    :param sampling_window_size: O tamanho da janela de entrada na serie temporal (Se for simetrica. Do contrario, ignorado).
-    :param enable_asymetrical: Se a serie eh assimetrica.
+    :param sampling_window_size: (ignorado) O tamanho da janela de entrada na serie temporal (Se for simetrica. Do contrario, ignorado).
+    :param enable_asymetrical: (ignorado) Se a serie eh assimetrica.
     :return: Arrays X e y completos.
     :param file_format: NPY (deafult): 1 Arquivo para X e outro para Y. NPZ: Cada linha das matrizes X e Y gera 1 arquivo dentro dos NPZ de saida.
     """
-    # Opening dataset.
-    input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
-    output_data = read_csv(dataset_directory + "/mav0/mocap0/data.csv").to_numpy()
-
-    # ===============DIFF=======================================================
-    # Precisamos restaurar o time para alinhar os dados depois do "diff"
-    original_ground_truth_timestamp = output_data[:, 0]
-
-    # inutil agora, mas deixarei aqui pra nao ter que refazer depois
-    original_imu_timestamp = input_data[:, 0]
-
-    # Queremos apenas a VARIACAO de posicao a cada instante.
-    output_data = diff(output_data, axis=0)
-    # Restauramos a referencia de time original.
-    output_data[:, 0] = original_ground_truth_timestamp[1:]
-    # ===============fim-de-DIFF================================================
-
-    # features without timestamp (we do not scale timestamp)
-    input_features = input_data[:, 1:]
-    output_features = output_data[:, 1:]
-
-    # Scaling data
-    input_scaler = StandardScaler()
-    input_features = input_scaler.fit_transform(input_features)
-    output_scaler = MinMaxScaler()
-    output_features = output_scaler.fit_transform(output_features)
-
-    # Replacing scaled data (we kept the original TIMESTAMP)
-    input_data[:, 1:] = input_features
-    output_data[:, 1:] = output_features
-
-    # A IMU e o ground truth nao sao coletados ao mesmo tempo, precisamos alinhar.
-    x, y = alinha_dataset_tum(input_data, output_data)
-
-    # Depois de alinhado, timestamp nao nos importa mais. Vamos descartar
-    x = x[:, 1:]
-    y = y[:, 1:]
-
-    # Divido x e y em diferentes conjuntos de mesmo tamanho e alinhados
-    x_chunks = split_into_chunks(x, 200)
-    y_chunks = split_into_chunks(y, 200)
-
-    # Vou concatenando os dados ja "splittados" nestes arrays
-    X_array = None
-    y_array = None
-
-    # A partir daqui, o bagulho fica louco. Vou dividir a entrada em pequenos
-    # datasets e fazer o split deles individualente para ter mais granularidade
-    # no tamanho das sequencias e nao resultar tambem em senquencias muito
-    # longas (com o tamanho do dataset inteiro).
-    for x, y in tqdm(list(zip(x_chunks, y_chunks)), desc="Split do dataset"):
-        # Fazemos o carregamento correto no formato de serie temporal
-        X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=enable_asymetrical, sampling_window_size=sampling_window_size)
-        # Um ajuste na dimensao do y pois prevemos so o proximo passo.
-        y = y.reshape(-1, 7)
-
-        # Agora jogamos fora os valores onde nao ha ground truth e serviram apenas
-        # para fazermos o alinhamento e o dataloader correto.
-        samples_validas = where(y > -44000, True, False)
-        X = X[samples_validas[:, 0]]
-        y = y[samples_validas[:, 0]]
-
-        if X_array is None and y_array is None:
-            X_array = X.copy()
-            y_array = y.copy()
-        else:
-            X_array = concatenate((X_array, X.copy()))
-            y_array = concatenate((y_array, y.copy()))
-
-    # Apena para manter o padrao de nomenclatura
-    X = X_array
-    y = y_array
-
     if file_format.lower() == "npy":
-        print("Saving NPY files...")
-        with open("x_data.npy", "wb") as x_file, open("y_data.npy", "wb") as y_file:
+        x_file = open("x_data.npy", "wb")
+        y_file = open("y_data.npy", "wb")
+    else:
+        x_file = open("x_data.npz", "wb")
+        y_file = open("y_data.npz", "wb")
+
+    counter = 0
+    for interval in tqdm(range(1, 201)[::-1], desc="Split do dataset"):
+        # Opening dataset.
+        input_data = read_csv(dataset_directory + "/mav0/imu0/data.csv").to_numpy()
+        output_data = read_csv(dataset_directory + "/mav0/mocap0/data.csv").to_numpy()
+
+        # ===============DIFF=======================================================
+        # Precisamos restaurar o time para alinhar os dados depois do "diff"
+        original_ground_truth_timestamp = output_data[:, 0]
+
+        # inutil agora, mas deixarei aqui pra nao ter que refazer depois
+        original_imu_timestamp = input_data[:, 0]
+
+        # Queremos apenas a VARIACAO de posicao a cada instante.
+        output_data = difference(output_data, interval=interval)
+        # Restauramos a referencia de time original.
+        output_data[:, 0] = original_ground_truth_timestamp[interval:]
+        # ===============fim-de-DIFF================================================
+
+        # features without timestamp (we do not scale timestamp)
+        input_features = input_data[:, 1:]
+        output_features = output_data[:, 1:]
+
+        # Scaling data
+        input_scaler = StandardScaler()
+        input_features = input_scaler.fit_transform(input_features)
+        output_scaler = MinMaxScaler()
+        output_features = output_scaler.fit_transform(output_features)
+
+        # Replacing scaled data (we kept the original TIMESTAMP)
+        input_data[:, 1:] = input_features
+        output_data[:, 1:] = output_features
+
+        # A IMU e o ground truth nao sao coletados ao mesmo tempo, precisamos alinhar.
+        x, y = alinha_dataset_tum(input_data, output_data)
+
+        # Depois de alinhado, timestamp nao nos importa mais. Vamos descartar
+        x = x[:, 1:]
+        y = y[:, 1:]
+
+        # Divido x e y em diferentes conjuntos de mesmo tamanho e alinhados
+        x_chunks = split_into_chunks(x, 10 ** 9)
+        y_chunks = split_into_chunks(y, 10 ** 9)
+
+        # Vou concatenando os dados ja "splittados" nestes arrays
+        X_array = None
+        y_array = None
+
+        # A partir daqui, o bagulho fica louco. Vou dividir a entrada em pequenos
+        # datasets e fazer o split deles individualente para ter mais granularidade
+        # no tamanho das sequencias e nao resultar tambem em senquencias muito
+        # longas (com o tamanho do dataset inteiro).
+        for x, y in list(zip(x_chunks, y_chunks)):
+            # Fazemos o carregamento correto no formato de serie temporal
+            X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=False, sampling_window_size=interval)
+            # Um ajuste na dimensao do y pois prevemos so o proximo passo.
+            y = y.reshape(-1, 7)
+
+            # Agora jogamos fora os valores onde nao ha ground truth e serviram apenas
+            # para fazermos o alinhamento e o dataloader correto.
+            samples_validas = where(y > -44000, True, False)
+            X = X[samples_validas[:, 0]]
+            y = y[samples_validas[:, 0]]
+
+            if X_array is None and y_array is None:
+                X_array = X.copy()
+                y_array = y.copy()
+            else:
+                X_array = concatenate((X_array, X.copy()))
+                y_array = concatenate((y_array, y.copy()))
+
+        # Apena para manter o padrao de nomenclatura
+        X = X_array
+        y = y_array
+
+        keys_to_concatenate = ["ptk_" + str(i) for i in range(counter, X.shape[0] + counter)]
+        counter += X.shape[0]
+
+        if file_format.lower() == "npy":
             save(x_file, X)
             save(y_file, y)
-        print("Saving NPY files Done.")
-    else:
-        print("Saving NPZ files...")
-        with open("x_data.npz", "wb") as x_file, open("y_data.npz", "wb") as y_file:
-            # Asterisco serve pra abrir a LISTA como se fosse *args.
-            # Dois asteriscos serviriam pra abrir um DICIONARIO como se fosse **kwargs.
-            savez(x_file, *X)
-            savez(y_file, *y)
-        print("Saving NPZ files Done.")
+        else:
+            savez(x_file, **dict(zip(keys_to_concatenate, X)))
+            savez(y_file, **dict(zip(keys_to_concatenate, y)))
+        x_file.flush()
+        y_file.flush()
 
+    x_file.close()
+    y_file.close()
     return X, y
 
 
@@ -762,10 +770,11 @@ Runs the experiment itself.
     """
 
     # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    # X, y = format_dataset(dataset_directory="dataset-room2_512_16", enable_asymetrical=True, file_format="NPZ")
+    X, y = format_dataset(dataset_directory="dataset-room2_512_16", file_format="NPZ")
+    return
 
     model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=32, epochs=300, device=device)
+                 output_size=7, training_batch_size=32, epochs=1, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
@@ -794,7 +803,7 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    # model.fit_dataloading()
+    model.fit_dataloading()
 
     # Realizamos a busca atraves do treinamento
     # cv_search.fit(X, y.reshape(-1, 1))
