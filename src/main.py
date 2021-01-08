@@ -1,10 +1,12 @@
 import csv
+import glob
 from math import sin, cos
+import os
 
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array
+from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array, load
 from pandas import Series, DataFrame, read_csv
 from ptk.timeseries import *
 from ptk.utils import *
@@ -662,13 +664,6 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
     :return: Arrays X e y completos.
     :param file_format: NPY (deafult): 1 Arquivo para X e outro para Y. NPZ: Cada linha das matrizes X e Y gera 1 arquivo dentro dos NPZ de saida.
     """
-    if file_format.lower() == "npy":
-        x_file = open("x_data.npy", "wb")
-        y_file = open("y_data.npy", "wb")
-    else:
-        x_file = open("x_data.npz", "wb")
-        y_file = open("y_data.npz", "wb")
-
     counter = 0
     for interval in tqdm(range(1, 201)[::-1], desc="Split do dataset"):
         # Opening dataset.
@@ -744,21 +739,34 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
         X = X_array
         y = y_array
 
-        keys_to_concatenate = ["ptk_" + str(i) for i in range(counter, X.shape[0] + counter)]
+        keys_to_concatenate = ["arr_" + str(i) for i in range(counter, X.shape[0] + counter)]
         counter += X.shape[0]
 
         if file_format.lower() == "npy":
-            save(x_file, X)
-            save(y_file, y)
+            with open("x_data.npy", "wb") as x_file, open("y_data.npy", "wb") as y_file:
+                save(x_file, X)
+                save(y_file, y)
         else:
-            savez(x_file, **dict(zip(keys_to_concatenate, X)))
-            savez(y_file, **dict(zip(keys_to_concatenate, y)))
-        x_file.flush()
-        y_file.flush()
+            with open("tmp_x/x_data" + str(counter) + ".npz", "wb") as x_file, open("tmp_y/y_data" + str(counter) + ".npz", "wb") as y_file:
+                # Asterisco serve pra abrir a LISTA como se fosse *args.
+                # Dois asteriscos serviriam pra abrir um DICIONARIO como se fosse **kwargs.
+                savez(x_file, **dict(zip(keys_to_concatenate, X)))
+                savez(y_file, **dict(zip(keys_to_concatenate, y)))
 
-    x_file.close()
-    y_file.close()
     return X, y
+
+
+def join_npz_files(files_origin_path="./", output_file="./x_data.npz"):
+    with open(output_file, "wb") as file:
+        npfiles = glob.glob(os.path.normpath(files_origin_path) + "/" + "*.npz")
+        npfiles.sort()
+        all_arrays = []
+        for i, npfile in enumerate(npfiles):
+            npz_file = load(npfile)
+            files_names = npz_file.files
+            all_arrays.extend([npz_file[file_name] for file_name in files_names])  # , mmap_mode="r"
+        savez(file, *all_arrays)
+    return
 
 
 def experiment(repeats):
@@ -770,8 +778,10 @@ Runs the experiment itself.
     """
 
     # Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    X, y = format_dataset(dataset_directory="dataset-room2_512_16", file_format="NPZ")
-    return
+    # X, y = format_dataset(dataset_directory="dataset-room2_512_16", file_format="NPZ")
+    # join_npz_files(files_origin_path="./tmp_x", output_file="./x_data.npz")
+    # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
+    # return
 
     model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
                  output_size=7, training_batch_size=32, epochs=1, device=device)
