@@ -7,7 +7,7 @@ from time import sleep, time
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array, load
+from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array, load, zeros
 from pandas import Series, DataFrame, read_csv
 from ptk.timeseries import *
 from ptk.utils import *
@@ -405,15 +405,15 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        room2_tum_dataset = GenericDatasetFromFiles(data_path="../drive/My Drive/PODE APAGAR/dataset-tum-room2/", convert_first=True, device=self.device)
+        room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device)
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
         # train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
         # val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
 
-        train_loader = PackingSequenceDataloader(train_dataset, batch_size=8, shuffle=True)
-        val_loader = PackingSequenceDataloader(val_dataset, batch_size=8, shuffle=True)
+        train_loader = PackingSequenceDataloader(train_dataset, batch_size=128, shuffle=True)
+        val_loader = PackingSequenceDataloader(val_dataset, batch_size=128, shuffle=True)
         # =====fim-DATA-PREPARATION=============================================
 
         epochs = self.epochs
@@ -723,6 +723,9 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
             # Um ajuste na dimensao do y pois prevemos so o proximo passo.
             y = y.reshape(-1, 7)
 
+            X = X.astype("float32")
+            y = y.astype("float32")
+
             # Agora jogamos fora os valores onde nao ha ground truth e serviram apenas
             # para fazermos o alinhamento e o dataloader correto.
             samples_validas = where(y > -44000, True, False)
@@ -785,7 +788,7 @@ Runs the experiment itself.
     # return
 
     model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=32, epochs=100, device=device)
+                 output_size=7, training_batch_size=2, epochs=12, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
@@ -899,7 +902,7 @@ Runs the experiment itself.
 
 if __name__ == '__main__':
 
-    plot_csv()
+    # plot_csv()
 
     if torch.cuda.is_available():
         dev = "cuda:0"
@@ -909,23 +912,34 @@ if __name__ == '__main__':
         print("Usando CPU")
     device = torch.device(dev)
 
-    print("abrindo dataset")
-    t0 = time()
-    room2_tum_dataset = GenericDatasetFromFiles(data_path="../drive/My Drive/PODE APAGAR/dataset-tum-room2/", convert_first=True, device=device)
-    print("tempo abrindo dataset:", time() - t0)
+    # dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv",
+    #                                        y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+    #                                        convert_first=True)
 
-    print("abrindo loader")
-    train_loader = PackingSequenceDataloader(room2_tum_dataset, batch_size=128, shuffle=True)
-    loader_iterable = iter(train_loader)
+    # print("abrindo dataset")
+    # t0 = time()
+    # room2_tum_dataset = GenericDatasetFromFiles(data_path="../drive/My Drive/PODE APAGAR/dataset-tum-room2/", convert_first=True, device=device)
+    # print("tempo abrindo dataset:", time() - t0)
+    #
+    # print("abrindo loader")
+    # train_loader = PackingSequenceDataloader(room2_tum_dataset, batch_size=128, shuffle=True)
+    # loader_iterable = iter(train_loader)
+    #
+    # print("abrindo manager")
+    # train_manager = iter(DataManager(train_loader, device=device, buffer_size=3))
+    #
+    # while True:
+    #     print("esperando")
+    #     sleep(1)
+    #     t0 = time()
+    #     x = next(train_manager)
+    #     print("tempo de resposta manager:", time() - t0)
 
-    print("abrindo manager")
-    train_manager = iter(DataManager(train_loader, device=device, buffer_size=3))
-
-    while True:
-        print("esperando")
-        sleep(1)
-        t0 = time()
-        x = next(train_manager)
-        print("tempo de resposta manager:", time() - t0)
+    # aux = zeros((1000,))
+    # for i in tqdm(dataset):
+    #     aux[i[0].shape[0]] += 1
+    #
+    # plt.plot(aux)
+    # plt.show()
 
     experiment(1)
