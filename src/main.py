@@ -432,7 +432,7 @@ overflow the memory.
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
-            for j, (X, y) in tqdm(enumerate(train_manager), desc="treino", total=len(train_manager)):
+            for j, (X, y) in enumerate(train_manager):
 
                 # Fazemos a otimizacao a cada MINI BATCH size
                 if (j + 1) % self.training_batch_size == 0:
@@ -452,7 +452,11 @@ overflow the memory.
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 single_loss.backward()
 
-                training_loss += single_loss
+                # .item() converts to numpy and therefore detach pytorch gradient.
+                # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
+                training_loss += single_loss.item()
+
+                break
 
             # O ultimo batch pode nao ter o mesmo tamanho que os demais e nao entrar no "if"
             self.optimizer.step()
@@ -461,14 +465,16 @@ overflow the memory.
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            for j, (X, y) in tqdm(enumerate(val_manager), desc="validacao", total=len(val_manager)):
+            for j, (X, y) in enumerate(val_manager):
                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
 
                 single_loss = self.loss_function(y_pred, y)
 
-                validation_loss += single_loss
+                # .item() converts to numpy and therefore detach pytorch gradient.
+                # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
+                validation_loss += single_loss.item()
             # Tira a media das losses.
             validation_loss = validation_loss / (j + 1)
 
