@@ -326,7 +326,7 @@ be adjusted whenever the network structure changes.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -419,7 +419,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -792,7 +792,7 @@ Runs the experiment itself.
     # return
 
     model = LSTM(input_size=6, hidden_layer_size=300, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=2, epochs=120, device=device)
+                 output_size=7, training_batch_size=10, epochs=120, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
