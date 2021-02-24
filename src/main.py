@@ -326,7 +326,7 @@ be adjusted whenever the network structure changes.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -405,7 +405,7 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device)
+        room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device, min_window_size=100, max_window_size=350)
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
@@ -419,7 +419,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -456,8 +456,6 @@ overflow the memory.
                 # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
                 training_loss += single_loss.item()
 
-                break
-
             # O ultimo batch pode nao ter o mesmo tamanho que os demais e nao entrar no "if"
             self.optimizer.step()
             self.optimizer.zero_grad()
@@ -486,8 +484,8 @@ overflow the memory.
                 torch.save(self, "best_model.pth")
                 torch.save(self.state_dict(), "best_model_state_dict.pth")
 
-            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
-            w.writerow([i, training_loss.item(), validation_loss.item()])
+            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss:10.10f}' + f' val_loss: {validation_loss:10.10f}')
+            w.writerow([i, training_loss, validation_loss])
             f.flush()
         f.close()
 
@@ -793,8 +791,8 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = LSTM(input_size=6, hidden_layer_size=20, n_lstm_units=1, bidirectional=True,
-                 output_size=7, training_batch_size=2, epochs=12, device=device)
+    model = LSTM(input_size=6, hidden_layer_size=300, n_lstm_units=1, bidirectional=False,
+                 output_size=7, training_batch_size=2, epochs=120, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
@@ -949,3 +947,4 @@ if __name__ == '__main__':
     # plt.show()
 
     experiment(1)
+
