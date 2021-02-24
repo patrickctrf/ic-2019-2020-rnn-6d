@@ -792,7 +792,7 @@ Runs the experiment itself.
     # return
 
     model = LSTM(input_size=6, hidden_layer_size=300, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=10, epochs=120, device=device)
+                 output_size=7, training_batch_size=10, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
