@@ -243,8 +243,8 @@ error within CUDA.
         self.loss_function = None
         self.optimizer = None
 
-        n_base_filters = 400
-        n_output_features = 6000
+        n_base_filters = 200
+        n_output_features = 4000
         self.feature_extractor = \
             Sequential(
                 Conv1d(input_size, 1 * n_base_filters, 7),
@@ -253,9 +253,7 @@ error within CUDA.
                 Conv1d(3 * n_base_filters, 4 * n_base_filters, 7),
                 Conv1d(4 * n_base_filters, 5 * n_base_filters, 7),
                 Conv1d(5 * n_base_filters, 6 * n_base_filters, 7),
-                Conv1d(6 * n_base_filters, 7 * n_base_filters, 7),
-                Conv1d(7 * n_base_filters, 8 * n_base_filters, 7),
-                Conv1d(8 * n_base_filters, n_output_features, 7)
+                Conv1d(6 * n_base_filters, n_output_features, 7)
             )
 
         self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
@@ -436,7 +434,7 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device,
-                                                   min_window_size=100, max_window_size=350, batch_size=self.training_batch_size)
+                                                   min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=True)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room2_tum_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * 0.001)))
@@ -470,7 +468,8 @@ overflow the memory.
             for j, (X, y) in enumerate(train_manager):
 
                 # Fazemos a otimizacao a cada MINI BATCH size
-                if (j + 1) % self.training_batch_size == 0:
+                # if (j + 1) % self.training_batch_size == 0:
+                if (j + 1) % 1 == 0:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
@@ -826,8 +825,8 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = LSTM(input_size=6, hidden_layer_size=200, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=64, epochs=50, device=device)
+    model = LSTM(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
+                 output_size=7, training_batch_size=1024, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
