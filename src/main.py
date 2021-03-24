@@ -264,25 +264,31 @@ input sequence and returns the prediction for the final step.
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
 
-        if self.packing_sequence is True:
-            # Para desempacotarmos a packed sequence, usamos esta funcao, que
-            # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
-            # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
-            # elemento de sua tupla (inverse[1]).
-            inverse = pad_packed_sequence(lstm_out, batch_first=True)
+        # if self.packing_sequence is True:
+        #     # Para desempacotarmos a packed sequence, usamos esta funcao, que
+        #     # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
+        #     # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
+        #     # elemento de sua tupla (inverse[1]).
+        #     inverse = pad_packed_sequence(lstm_out, batch_first=True)
+        #
+        #     # A saida do LSTM eh uma packed sequence, pois cada sequencia tem um
+        #     # tamanho diferente. So nos interessa o ultimo elemento de cada
+        #     # sequencia, que esta informado no segundo elemento (inverse[1]).
+        #     # Fazemos o slicing do numpy selecionando todas as colunas com 'arange'
+        #     # e o elemento que desejamos'inverse[1] -1'.
+        #     lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
+        # else:
+        #     # All batch size, whatever sequence length, forward direction and
+        #     # lstm output size (hidden size).
+        #     # We only want the last output of lstm (end of sequence), that is
+        #     # the reason of '[:,-1,:]'.
+        #     lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
 
-            # A saida do LSTM eh uma packed sequence, pois cada sequencia tem um
-            # tamanho diferente. So nos interessa o ultimo elemento de cada
-            # sequencia, que esta informado no segundo elemento (inverse[1]).
-            # Fazemos o slicing do numpy selecionando todas as colunas com 'arange'
-            # e o elemento que desejamos'inverse[1] -1'.
-            lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
-        else:
-            # All batch size, whatever sequence length, forward direction and
-            # lstm output size (hidden size).
-            # We only want the last output of lstm (end of sequence), that is
-            # the reason of '[:,-1,:]'.
-            lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        # All batch size, whatever sequence length, forward direction and
+        # lstm output size (hidden size).
+        # We only want the last output of lstm (end of sequence), that is
+        # the reason of '[:,-1,:]'.
+        lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
 
         predictions = self.linear(lstm_out)
 
@@ -405,15 +411,20 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device, min_window_size=100, max_window_size=350)
+        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device,
+                                                   min_window_size=100, max_window_size=350, batch_size=self.training_batch_size)
+
+        # Diminuir o dataset para verificar o funcionamento de scripts
+        room2_tum_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * 0.001)))
+
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
-        # train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
-        # val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
+        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True)
+        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True)
 
-        train_loader = PackingSequenceDataloader(train_dataset, batch_size=128, shuffle=True)
-        val_loader = PackingSequenceDataloader(val_dataset, batch_size=128, shuffle=True)
+        # train_loader = PackingSequenceDataloader(train_dataset, batch_size=128, shuffle=True)
+        # val_loader = PackingSequenceDataloader(val_dataset, batch_size=128, shuffle=True)
         # =====fim-DATA-PREPARATION=============================================
 
         epochs = self.epochs
@@ -427,8 +438,8 @@ overflow the memory.
 
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
-            train_manager = DataManager(train_loader, device=self.device, buffer_size=3)
-            val_manager = DataManager(val_loader, device=self.device, buffer_size=3)
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=2)
+            val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
@@ -792,7 +803,7 @@ Runs the experiment itself.
     # return
 
     model = LSTM(input_size=6, hidden_layer_size=300, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=10, epochs=50, device=device)
+                 output_size=7, training_batch_size=64, epochs=5, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
@@ -947,4 +958,3 @@ if __name__ == '__main__':
     # plt.show()
 
     experiment(1)
-
