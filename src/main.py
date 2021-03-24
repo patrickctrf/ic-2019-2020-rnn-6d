@@ -9,6 +9,8 @@ import torch
 from matplotlib import pyplot as plt
 from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array, load, zeros
 from pandas import Series, DataFrame, read_csv
+from torch.nn import Sequential, Conv1d
+
 from ptk.timeseries import *
 from ptk.utils import *
 from skimage.metrics import mean_squared_error
@@ -16,7 +18,7 @@ from sklearn.metrics import make_scorer
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from skopt import BayesSearchCV
-from torch import nn, stack
+from torch import nn, stack, movedim
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 from torch.utils.data import DataLoader, random_split, Subset
 from tqdm import tqdm
@@ -241,7 +243,22 @@ error within CUDA.
         self.loss_function = None
         self.optimizer = None
 
-        self.lstm = nn.LSTM(self.input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
+        n_base_filters = 400
+        n_output_features = 6000
+        self.feature_extractor = \
+            Sequential(
+                Conv1d(input_size, 1 * n_base_filters, 7),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7),
+                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7),
+                Conv1d(5 * n_base_filters, 6 * n_base_filters, 7),
+                Conv1d(6 * n_base_filters, 7 * n_base_filters, 7),
+                Conv1d(7 * n_base_filters, 8 * n_base_filters, 7),
+                Conv1d(8 * n_base_filters, n_output_features, 7)
+            )
+
+        self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
         self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
 
@@ -260,6 +277,13 @@ input sequence and returns the prediction for the final step.
         :param input_seq: Input seuqnece of the time series.
         :return: The prediction in the end of the series.
         """
+
+        input_seq = movedim(input_seq, -2, -1)
+
+        input_seq = self.feature_extractor(input_seq)
+
+        input_seq = movedim(input_seq, -2, -1)
+
         # (seq_len, batch, input_size), mas pode inverter o
         # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
         lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
@@ -414,8 +438,8 @@ overflow the memory.
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device,
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size)
 
-        # Diminuir o dataset para verificar o funcionamento de scripts
-        room2_tum_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * 0.001)))
+        # # Diminuir o dataset para verificar o funcionamento de scripts
+        # room2_tum_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * 0.001)))
 
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
@@ -802,8 +826,8 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = LSTM(input_size=6, hidden_layer_size=300, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=64, epochs=5, device=device)
+    model = LSTM(input_size=6, hidden_layer_size=200, n_lstm_units=1, bidirectional=False,
+                 output_size=7, training_batch_size=64, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
