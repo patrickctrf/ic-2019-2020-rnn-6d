@@ -248,12 +248,12 @@ error within CUDA.
         n_output_features = 400
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, 7), nn.BatchNorm1d(1 * n_base_filters), nn.MaxPool1d(2), nn.Dropout(), nn.LeakyReLU(),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7), nn.BatchNorm1d(2 * n_base_filters), nn.MaxPool1d(2), nn.Dropout(), nn.LeakyReLU(),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.BatchNorm1d(3 * n_base_filters), nn.MaxPool1d(2), nn.Dropout(), nn.LeakyReLU(),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.BatchNorm1d(4 * n_base_filters), nn.MaxPool1d(2), nn.Dropout(), nn.LeakyReLU(),
-                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.BatchNorm1d(5 * n_base_filters), nn.MaxPool1d(2), nn.Dropout(), nn.LeakyReLU(),
-                Conv1d(5 * n_base_filters, n_output_features, 7), nn.BatchNorm1d(n_output_features), nn.MaxPool1d(2), nn.Dropout(), nn.LeakyReLU()
+                Conv1d(input_size, 1 * n_base_filters, 7), nn.BatchNorm1d(1 * n_base_filters), nn.Dropout(), nn.LeakyReLU(),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7), nn.BatchNorm1d(2 * n_base_filters), nn.Dropout(), nn.LeakyReLU(),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.BatchNorm1d(3 * n_base_filters), nn.Dropout(), nn.LeakyReLU(),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.BatchNorm1d(4 * n_base_filters), nn.Dropout(), nn.LeakyReLU(),
+                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.BatchNorm1d(5 * n_base_filters), nn.Dropout(), nn.LeakyReLU(),
+                Conv1d(5 * n_base_filters, n_output_features, 7), nn.BatchNorm1d(n_output_features), nn.Dropout(), nn.LeakyReLU()
             )
 
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
