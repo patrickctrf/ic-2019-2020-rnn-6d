@@ -188,7 +188,7 @@ inverse scale (yhat) too.
     return inverted[0, -1]
 
 
-class LSTM(nn.Module):
+class InertialModule(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu")):
         """
 This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
@@ -243,22 +243,30 @@ error within CUDA.
         self.loss_function = None
         self.optimizer = None
 
+        pooling_output_size = 100
         n_base_filters = 200
         n_output_features = 4000
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, 7),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7),
-                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7),
-                Conv1d(5 * n_base_filters, 6 * n_base_filters, 7),
-                Conv1d(6 * n_base_filters, n_output_features, 7)
+                Conv1d(input_size, 1 * n_base_filters, 7), nn.LeakyReLU(),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7), nn.LeakyReLU(),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.LeakyReLU(),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.LeakyReLU(),
+                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.LeakyReLU(),
+                Conv1d(5 * n_base_filters, 6 * n_base_filters, 7), nn.LeakyReLU(),
+                Conv1d(6 * n_base_filters, n_output_features, 7), nn.LeakyReLU()
             )
 
-        self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
+        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
-        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
+        self.dense_network = Sequential(
+            nn.Linear(pooling_output_size * n_output_features, 1024), nn.LeakyReLU(),
+            nn.Linear(1024, 512), nn.LeakyReLU(),
+            nn.Linear(512, self.output_size)
+        )
+        # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
+        #
+        # self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
@@ -276,43 +284,49 @@ input sequence and returns the prediction for the final step.
         :return: The prediction in the end of the series.
         """
 
+        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # convolucao e precisam vir no meio para o pytorch
         input_seq = movedim(input_seq, -2, -1)
 
         input_seq = self.feature_extractor(input_seq)
 
-        input_seq = movedim(input_seq, -2, -1)
-
-        # (seq_len, batch, input_size), mas pode inverter o
-        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
-        lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
-
-        # if self.packing_sequence is True:
-        #     # Para desempacotarmos a packed sequence, usamos esta funcao, que
-        #     # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
-        #     # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
-        #     # elemento de sua tupla (inverse[1]).
-        #     inverse = pad_packed_sequence(lstm_out, batch_first=True)
+        # input_seq = movedim(input_seq, -2, -1)
         #
-        #     # A saida do LSTM eh uma packed sequence, pois cada sequencia tem um
-        #     # tamanho diferente. So nos interessa o ultimo elemento de cada
-        #     # sequencia, que esta informado no segundo elemento (inverse[1]).
-        #     # Fazemos o slicing do numpy selecionando todas as colunas com 'arange'
-        #     # e o elemento que desejamos'inverse[1] -1'.
-        #     lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
-        # else:
-        #     # All batch size, whatever sequence length, forward direction and
-        #     # lstm output size (hidden size).
-        #     # We only want the last output of lstm (end of sequence), that is
-        #     # the reason of '[:,-1,:]'.
-        #     lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        # # (seq_len, batch, input_size), mas pode inverter o
+        # # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        # lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
+        #
+        # # if self.packing_sequence is True:
+        # #     # Para desempacotarmos a packed sequence, usamos esta funcao, que
+        # #     # preenche com zeros as sequencia para possuirem todas o mesmo tamanho
+        # #     # na matriz de saida, mas informa onde cada uma delas ACABA no segundo
+        # #     # elemento de sua tupla (inverse[1]).
+        # #     inverse = pad_packed_sequence(lstm_out, batch_first=True)
+        # #
+        # #     # A saida do LSTM eh uma packed sequence, pois cada sequencia tem um
+        # #     # tamanho diferente. So nos interessa o ultimo elemento de cada
+        # #     # sequencia, que esta informado no segundo elemento (inverse[1]).
+        # #     # Fazemos o slicing do numpy selecionando todas as colunas com 'arange'
+        # #     # e o elemento que desejamos'inverse[1] -1'.
+        # #     lstm_out = inverse[0][arange(inverse[0].shape[0]), inverse[1] - 1]
+        # # else:
+        # #     # All batch size, whatever sequence length, forward direction and
+        # #     # lstm output size (hidden size).
+        # #     # We only want the last output of lstm (end of sequence), that is
+        # #     # the reason of '[:,-1,:]'.
+        # #     lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        #
+        # # All batch size, whatever sequence length, forward direction and
+        # # lstm output size (hidden size).
+        # # We only want the last output of lstm (end of sequence), that is
+        # # the reason of '[:,-1,:]'.
+        # lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        #
+        # predictions = self.linear(lstm_out)
 
-        # All batch size, whatever sequence length, forward direction and
-        # lstm output size (hidden size).
-        # We only want the last output of lstm (end of sequence), that is
-        # the reason of '[:,-1,:]'.
-        lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        input_seq = self.adaptive_pooling(input_seq)
 
-        predictions = self.linear(lstm_out)
+        predictions = self.dense_network(input_seq.view(input_seq.shape[0], -1))
 
         return predictions
 
@@ -473,11 +487,11 @@ overflow the memory.
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
+                # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                # self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+                #                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
 
                 y_pred = self(X)
 
@@ -498,8 +512,8 @@ overflow the memory.
             training_loss = training_loss / (j + 1)
 
             for j, (X, y) in enumerate(val_manager):
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
+                # self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+                #                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
                 y_pred = self(X)
 
                 single_loss = self.loss_function(y_pred, y)
@@ -825,8 +839,8 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = LSTM(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
-                 output_size=7, training_batch_size=1024, epochs=50, device=device)
+    model = InertialModule(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
+                           output_size=7, training_batch_size=1024, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
