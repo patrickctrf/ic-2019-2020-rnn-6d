@@ -248,18 +248,18 @@ error within CUDA.
         n_output_features = 400
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(5 * n_base_filters, n_output_features, 7), nn.LeakyReLU()
+                Conv1d(input_size, 1 * n_base_filters, 7), nn.BatchNorm1d(1 * n_base_filters), nn.MaxPool1d(2), nn.Droupout(), nn.LeakyReLU(),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7), nn.BatchNorm1d(2 * n_base_filters), nn.MaxPool1d(2), nn.Droupout(), nn.LeakyReLU(),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.BatchNorm1d(3 * n_base_filters), nn.MaxPool1d(2), nn.Droupout(), nn.LeakyReLU(),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.BatchNorm1d(4 * n_base_filters), nn.MaxPool1d(2), nn.Droupout(), nn.LeakyReLU(),
+                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.BatchNorm1d(5 * n_base_filters), nn.MaxPool1d(2), nn.Droupout(), nn.LeakyReLU(),
+                Conv1d(5 * n_base_filters, n_output_features, 7), nn.BatchNorm1d(n_output_features), nn.MaxPool1d(2), nn.Droupout(), nn.LeakyReLU()
             )
 
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(),
+            nn.Linear(pooling_output_size * n_output_features, 128), nn.BatchNorm1d(128), nn.Dropout(), nn.LeakyReLU(),
             nn.Linear(128, 64), nn.LeakyReLU(),
             nn.Linear(64, self.output_size)
         )
@@ -510,6 +510,8 @@ overflow the memory.
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
+            # validando o modelo da forma correta
+            self.eval()
             for j, (X, y) in enumerate(val_manager):
                 # self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                 #                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
@@ -520,6 +522,9 @@ overflow the memory.
                 # .item() converts to numpy and therefore detach pytorch gradient.
                 # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
                 validation_loss += single_loss.item()
+            # Voltamos ao modo treino
+            self.train()
+
             # Tira a media das losses.
             validation_loss = validation_loss / (j + 1)
 
