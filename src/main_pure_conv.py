@@ -473,8 +473,8 @@ overflow the memory.
 
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
-            train_manager = DataManager(train_loader, device=self.device, buffer_size=2)
-            val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=1)
+            val_manager = DataManager(val_loader, device=self.device, buffer_size=1)
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
@@ -844,7 +844,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
-                           output_size=7, training_batch_size=1024, epochs=50, device=device)
+                           output_size=7, training_batch_size=512, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
