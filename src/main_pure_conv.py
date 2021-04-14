@@ -244,8 +244,8 @@ error within CUDA.
         self.optimizer = None
 
         pooling_output_size = 100
-        n_base_filters = 200
-        n_output_features = 4000
+        n_base_filters = 32
+        n_output_features = 400
         self.feature_extractor = \
             Sequential(
                 Conv1d(input_size, 1 * n_base_filters, 7), nn.LeakyReLU(),
@@ -253,16 +253,15 @@ error within CUDA.
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.LeakyReLU(),
                 Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.LeakyReLU(),
                 Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(5 * n_base_filters, 6 * n_base_filters, 7), nn.LeakyReLU(),
-                Conv1d(6 * n_base_filters, n_output_features, 7), nn.LeakyReLU()
+                Conv1d(5 * n_base_filters, n_output_features, 7), nn.LeakyReLU()
             )
 
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 1024), nn.LeakyReLU(),
-            nn.Linear(1024, 512), nn.LeakyReLU(),
-            nn.Linear(512, self.output_size)
+            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(),
+            nn.Linear(128, 64), nn.LeakyReLU(),
+            nn.Linear(64, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -856,16 +855,16 @@ Runs the experiment itself.
                                  training_percent=0.8,
                                  blocking_split=False)
     regressor = model
-    cv_search = \
-        BayesSearchCV(estimator=regressor, cv=splitter,
-                      search_spaces=parametros,
-                      refit=True,
-                      n_iter=4,
-                      verbose=1,
-                      # n_jobs=4,
-                      scoring=make_scorer(mean_squared_error,
-                                          greater_is_better=False,
-                                          needs_proba=False))
+    # cv_search = \
+    #     BayesSearchCV(estimator=regressor, cv=splitter,
+    #                   search_spaces=parametros,
+    #                   refit=True,
+    #                   n_iter=4,
+    #                   verbose=1,
+    #                   # n_jobs=4,
+    #                   scoring=make_scorer(mean_squared_error,
+    #                                       greater_is_better=False,
+    #                                       needs_proba=False))
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
