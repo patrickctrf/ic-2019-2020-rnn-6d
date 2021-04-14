@@ -248,13 +248,14 @@ error within CUDA.
         n_output_features = 400
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, 7), nn.BatchNorm1d(1 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, 7), nn.BatchNorm1d(2 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, 7), nn.BatchNorm1d(3 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, 7), nn.BatchNorm1d(4 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(4 * n_base_filters, 5 * n_base_filters, 7), nn.BatchNorm1d(5 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(5 * n_base_filters, n_output_features, 7), nn.BatchNorm1d(n_output_features), nn.Dropout2d(), nn.LeakyReLU()
-            )
+                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.BatchNorm1d(1 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.BatchNorm1d(2 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.BatchNorm1d(3 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.BatchNorm1d(4 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
+                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.BatchNorm1d(n_output_features), nn.Dropout2d(), nn.LeakyReLU()
+            )  # We need to apply Dropout2d instead of Dropout.
+        # Dropout2d zeroes whole convolution channels, while simple Dropout
+        # get random elements and generate instability in training process.
 
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
@@ -844,7 +845,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
-                           output_size=7, training_batch_size=512, epochs=50, device=device)
+                           output_size=7, training_batch_size=256, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
