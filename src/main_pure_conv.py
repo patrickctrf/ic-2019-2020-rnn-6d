@@ -9,6 +9,7 @@ import torch
 from matplotlib import pyplot as plt
 from numpy import arange, random, vstack, transpose, asarray, absolute, diff, savetxt, save, savez, memmap, copyto, concatenate, ones, where, array, load, zeros
 from pandas import Series, DataFrame, read_csv
+from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
 
 from ptk.timeseries import *
@@ -189,7 +190,8 @@ inverse scale (yhat) too.
 
 
 class InertialModule(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu")):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu"),
+                 use_amp=True):
         """
 This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
 receives sequences and returns the predcition at the end of each one.
@@ -234,6 +236,7 @@ error within CUDA.
             self.bidirectional = 0
             self.num_directions = 1
         self.device = device
+        self.use_amp = use_amp  # Automatic Mixed Precision (float16 and float32)
 
         # Proporcao entre dados de treino e de validacao
         self.train_percentage = 1 - self.validation_percent
@@ -467,6 +470,7 @@ overflow the memory.
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+        scaler = GradScaler(enabled=self.use_amp)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -480,12 +484,12 @@ overflow the memory.
             validation_loss = 0
             self.optimizer.zero_grad()
             for j, (X, y) in enumerate(train_manager):
-
                 # Fazemos a otimizacao a cada MINI BATCH size
                 # if (j + 1) % self.training_batch_size == 0:
-                if (j + 1) % 1 == 0:
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
+                # if (j + 1) % 1 == 0:
+                #     scaler.step(self.optimizer)
+                #     scaler.update()
+                #     self.optimizer.zero_grad()
 
                 # # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # # ocorre erro no backward(). O tamanho do batch para a cell eh
@@ -493,19 +497,23 @@ overflow the memory.
                 # self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                 #                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
 
-                y_pred = self(X)
-
-                # Repare que NAO ESTAMOS acumulando a LOSS.
-                single_loss = self.loss_function(y_pred, y)
+                with autocast(enabled=self.use_amp):
+                    y_pred = self(X)
+                    # Repare que NAO ESTAMOS acumulando a LOSS.
+                    single_loss = self.loss_function(y_pred, y)
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
-                single_loss.backward()
+                scaler.scale(single_loss).backward()
+                scaler.step(self.optimizer)
+                scaler.update()
+                self.optimizer.zero_grad()
 
                 # .item() converts to numpy and therefore detach pytorch gradient.
                 # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
-                training_loss += single_loss.item()
+                training_loss += single_loss.detach()
 
             # O ultimo batch pode nao ter o mesmo tamanho que os demais e nao entrar no "if"
-            self.optimizer.step()
+            scaler.step(self.optimizer)
+            scaler.update()
             self.optimizer.zero_grad()
 
             # Tira a media das losses.
@@ -516,13 +524,13 @@ overflow the memory.
             for j, (X, y) in enumerate(val_manager):
                 # self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
                 #                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
-                y_pred = self(X)
-
-                single_loss = self.loss_function(y_pred, y)
+                with autocast(enabled=self.use_amp):
+                    y_pred = self(X)
+                    single_loss = self.loss_function(y_pred, y)
 
                 # .item() converts to numpy and therefore detach pytorch gradient.
                 # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
-                validation_loss += single_loss.item()
+                validation_loss += single_loss.detach()
             # Voltamos ao modo treino
             self.train()
 
