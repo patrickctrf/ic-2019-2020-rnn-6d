@@ -190,8 +190,7 @@ inverse scale (yhat) too.
 
 
 class InertialModule(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu"),
-                 use_amp=True):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu"), use_amp=True):
         """
 This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
 receives sequences and returns the predcition at the end of each one.
@@ -246,16 +245,18 @@ error within CUDA.
         self.loss_function = None
         self.optimizer = None
 
+        dropout_prob = 0.5
+
         pooling_output_size = 100
         n_base_filters = 32
-        n_output_features = 400
+        n_output_features = 200
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.BatchNorm1d(1 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.BatchNorm1d(2 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.BatchNorm1d(3 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.BatchNorm1d(4 * n_base_filters), nn.Dropout2d(), nn.LeakyReLU(),
-                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.BatchNorm1d(n_output_features), nn.Dropout2d(), nn.LeakyReLU()
+                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.BatchNorm1d(1 * n_base_filters), nn.Dropout2d(p=dropout_prob), nn.LeakyReLU(),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.BatchNorm1d(2 * n_base_filters), nn.Dropout2d(p=dropout_prob), nn.LeakyReLU(),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.BatchNorm1d(3 * n_base_filters), nn.Dropout2d(p=dropout_prob), nn.LeakyReLU(),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.BatchNorm1d(4 * n_base_filters), nn.Dropout2d(p=dropout_prob), nn.LeakyReLU(),
+                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.BatchNorm1d(n_output_features), nn.Dropout2d(p=dropout_prob), nn.LeakyReLU()
             )  # We need to apply Dropout2d instead of Dropout.
         # Dropout2d zeroes whole convolution channels, while simple Dropout
         # get random elements and generate instability in training process.
@@ -263,9 +264,9 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 128), nn.BatchNorm1d(128), nn.Dropout(), nn.LeakyReLU(),
-            nn.Linear(128, 64), nn.LeakyReLU(),
-            nn.Linear(64, self.output_size)
+            nn.Linear(pooling_output_size * n_output_features, 64), nn.BatchNorm1d(64), nn.Dropout(p=dropout_prob), nn.LeakyReLU(),
+            nn.Linear(64, 32), nn.LeakyReLU(),
+            nn.Linear(32, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
