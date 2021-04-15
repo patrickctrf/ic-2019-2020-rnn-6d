@@ -449,7 +449,7 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=True, device=self.device,
+        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=False, device=self.device,
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=True)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
@@ -458,8 +458,8 @@ overflow the memory.
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
 
-        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True)
-        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True)
+        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
+        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
 
         # train_loader = PackingSequenceDataloader(train_dataset, batch_size=128, shuffle=True)
         # val_loader = PackingSequenceDataloader(val_dataset, batch_size=128, shuffle=True)
@@ -477,8 +477,8 @@ overflow the memory.
 
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
-            train_manager = DataManager(train_loader, device=self.device, buffer_size=1)
-            val_manager = DataManager(val_loader, device=self.device, buffer_size=1)
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=2)
+            val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
@@ -852,7 +852,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
-                           output_size=7, training_batch_size=256, epochs=50, device=device)
+                           output_size=7, training_batch_size=1024, epochs=50, device=device)
     model.to(device)
 
     # Gera os parametros de entrada aleatoriamente. Alguns sao uniformes nos
