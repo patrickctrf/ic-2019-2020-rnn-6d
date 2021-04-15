@@ -190,7 +190,8 @@ inverse scale (yhat) too.
 
 
 class InertialModule(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu"), use_amp=True):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu"),
+                 use_amp=True):
         """
 This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
 receives sequences and returns the predcition at the end of each one.
@@ -449,7 +450,7 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", convert_first=False, device=self.device,
+        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=True)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
