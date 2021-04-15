@@ -265,7 +265,7 @@ error within CUDA.
 
         self.dense_network = Sequential(
             nn.Linear(pooling_output_size * n_output_features, 64), nn.BatchNorm1d(64), nn.Dropout(p=dropout_prob), nn.LeakyReLU(),
-            nn.Linear(64, 32), nn.LeakyReLU(),
+            nn.Linear(64, 32), nn.LeakyReLU(), nn.BatchNorm1d(32),
             nn.Linear(32, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
