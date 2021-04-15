@@ -544,8 +544,8 @@ overflow the memory.
                 torch.save(self, "best_model.pth")
                 torch.save(self.state_dict(), "best_model_state_dict.pth")
 
-            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss:10.10f}' + f' val_loss: {validation_loss:10.10f}')
-            w.writerow([i, training_loss, validation_loss])
+            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
+            w.writerow([i, training_loss.item(), validation_loss.item()])
             f.flush()
         f.close()
 
