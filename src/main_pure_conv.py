@@ -511,11 +511,6 @@ overflow the memory.
                 # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
                 training_loss += single_loss.detach()
 
-            # O ultimo batch pode nao ter o mesmo tamanho que os demais e nao entrar no "if"
-            scaler.step(self.optimizer)
-            scaler.update()
-            self.optimizer.zero_grad()
-
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
