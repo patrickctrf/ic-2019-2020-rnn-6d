@@ -247,7 +247,7 @@ error within CUDA.
         self.optimizer = None
 
         pooling_output_size = 100
-        n_base_filters = 128
+        n_base_filters = 80
         n_output_features = 200
         self.feature_extractor = \
             Sequential(
