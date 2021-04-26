@@ -267,9 +267,9 @@ error within CUDA.
             nn.Linear(72, 32), nn.LeakyReLU(),
             nn.Linear(32, self.output_size)
         )
-        # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
-        #
-        # self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
+        self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
+
+        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
