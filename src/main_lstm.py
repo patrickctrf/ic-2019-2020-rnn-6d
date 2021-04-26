@@ -273,8 +273,8 @@ error within CUDA.
 
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
-        self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size, device=self.device),
-                            torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size, device=self.device))
+        self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
+                            torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
 
         return
 
@@ -333,109 +333,109 @@ input sequence and returns the prediction for the final step.
 
         return predictions
 
-    def fit(self, X, y):
-        """
-This method contains the customized script for training this estimator. It must
-be adjusted whenever the network structure changes.
-
-        :param X: Input X data as numpy array. Each sample may have different length.
-        :param y: Respective output for each input sequence. Also numpy array
-        :return: Trained model with best validation loss found (it uses checkpoint).
-        """
-        # =====DATA-PREPARATION=================================================
-        # y numpy array values into torch tensors
-        self.train()
-        self.packing_sequence = True
-        self.to(self.device)
-        if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
-        y = y.to(self.device).view(-1, self.output_size)
-        # split into mini batches
-        y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
-
-        # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
-        # lista (que nao reclama de tamanhos diferentes em seus elementos).
-        if not isinstance(X, torch.Tensor):
-            lista_X = [torch.from_numpy(i.astype("float32")).view(-1, self.input_size).to(self.device) for i in X]
-        else:
-            lista_X = [i.view(-1, self.input_size) for i in X]
-        X_batches = split_into_chunks(lista_X, self.training_batch_size)
-
-        # pytorch only accepts different sizes tensors inside packed_sequences.
-        # Then we need to convert it.
-        aux_list = []
-        for i in X_batches:
-            aux_list.append(pack_sequence(i, enforce_sorted=False))
-        X_batches = aux_list
-        # =====fim-DATA-PREPARATION=============================================
-
-        epochs = self.epochs
-        best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
-
-        f = open("loss_log.csv", "w")
-        w = csv.writer(f)
-        w.writerow(["epoch", "training_loss", "val_loss"])
-
-        tqdm_bar = tqdm(range(epochs))
-        for i in tqdm_bar:
-            training_loss = 0
-            validation_loss = 0
-            for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
-                self.optimizer.zero_grad()
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
-
-                y_pred = self(X)
-
-                single_loss = self.loss_function(y_pred, y)
-                single_loss.backward()
-                self.optimizer.step()
-
-                training_loss += single_loss
-            # Tira a media das losses.
-            training_loss = training_loss / (j + 1)
-
-            for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * (1.0 - self.validation_percent)):], y_batches[int(len(y_batches) * (1.0 - self.validation_percent)):])):
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
-                y_pred = self(X)
-
-                single_loss = self.loss_function(y_pred, y)
-
-                validation_loss += single_loss
-            # Tira a media das losses.
-            validation_loss = validation_loss / (j + 1)
-
-            # Checkpoint to best models found.
-            if best_validation_loss > validation_loss:
-                # Update the new best loss.
-                best_validation_loss = validation_loss
-                # torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
-                torch.save(self, "best_model.pth")
-                torch.save(self.state_dict(), "best_model_state_dict.pth")
-
-            tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
-            w.writerow([i, training_loss.item(), validation_loss.item()])
-            f.flush()
-        f.close()
-
-        self.eval()
-        self.packing_sequence = False
-
-        # At the end of training, save the final model.
-        torch.save(self, "last_training_model.pth")
-
-        # Update itself with BEST weights foundfor each layer.
-        self.load_state_dict(torch.load("best_model_state_dict.pth"))
-
-        self.eval()
-
-        # Returns the best model found so far.
-        return torch.load("best_model.pth")
+#     def fit(self, X, y):
+#         """
+# This method contains the customized script for training this estimator. It must
+# be adjusted whenever the network structure changes.
+#
+#         :param X: Input X data as numpy array. Each sample may have different length.
+#         :param y: Respective output for each input sequence. Also numpy array
+#         :return: Trained model with best validation loss found (it uses checkpoint).
+#         """
+#         # =====DATA-PREPARATION=================================================
+#         # y numpy array values into torch tensors
+#         self.train()
+#         self.packing_sequence = True
+#         self.to(self.device)
+#         if not isinstance(y, torch.Tensor): y = torch.from_numpy(y.astype("float32"))
+#         y = y.to(self.device).view(-1, self.output_size)
+#         # split into mini batches
+#         y_batches = torch.split(y, split_size_or_sections=self.training_batch_size)
+#
+#         # Como cada tensor tem um tamanho Diferente, colocamos eles em uma
+#         # lista (que nao reclama de tamanhos diferentes em seus elementos).
+#         if not isinstance(X, torch.Tensor):
+#             lista_X = [torch.from_numpy(i.astype("float32")).view(-1, self.input_size).to(self.device) for i in X]
+#         else:
+#             lista_X = [i.view(-1, self.input_size) for i in X]
+#         X_batches = split_into_chunks(lista_X, self.training_batch_size)
+#
+#         # pytorch only accepts different sizes tensors inside packed_sequences.
+#         # Then we need to convert it.
+#         aux_list = []
+#         for i in X_batches:
+#             aux_list.append(pack_sequence(i, enforce_sorted=False))
+#         X_batches = aux_list
+#         # =====fim-DATA-PREPARATION=============================================
+#
+#         epochs = self.epochs
+#         best_validation_loss = 999999
+#         if self.loss_function is None: self.loss_function = nn.MSELoss()
+#         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+#
+#         f = open("loss_log.csv", "w")
+#         w = csv.writer(f)
+#         w.writerow(["epoch", "training_loss", "val_loss"])
+#
+#         tqdm_bar = tqdm(range(epochs))
+#         for i in tqdm_bar:
+#             training_loss = 0
+#             validation_loss = 0
+#             for j, (X, y) in enumerate(zip(X_batches[:int(len(X_batches) * (1.0 - self.validation_percent))], y_batches[:int(len(y_batches) * (1.0 - self.validation_percent))])):
+#                 self.optimizer.zero_grad()
+#                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
+#                 # ocorre erro no backward(). O tamanho do batch para a cell eh
+#                 # simplesmente o tamanho do batch em y ou X (tanto faz).
+#                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+#                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
+#
+#                 y_pred = self(X)
+#
+#                 single_loss = self.loss_function(y_pred, y)
+#                 single_loss.backward()
+#                 self.optimizer.step()
+#
+#                 training_loss += single_loss
+#             # Tira a media das losses.
+#             training_loss = training_loss / (j + 1)
+#
+#             for j, (X, y) in enumerate(zip(X_batches[int(len(X_batches) * (1.0 - self.validation_percent)):], y_batches[int(len(y_batches) * (1.0 - self.validation_percent)):])):
+#                 self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device),
+#                                     torch.zeros(self.num_directions * self.n_lstm_units, y.shape[0], self.hidden_layer_size).to(self.device))
+#                 y_pred = self(X)
+#
+#                 single_loss = self.loss_function(y_pred, y)
+#
+#                 validation_loss += single_loss
+#             # Tira a media das losses.
+#             validation_loss = validation_loss / (j + 1)
+#
+#             # Checkpoint to best models found.
+#             if best_validation_loss > validation_loss:
+#                 # Update the new best loss.
+#                 best_validation_loss = validation_loss
+#                 # torch.save(self, "{:.15f}".format(best_validation_loss) + "_checkpoint.pth")
+#                 torch.save(self, "best_model.pth")
+#                 torch.save(self.state_dict(), "best_model_state_dict.pth")
+#
+#             tqdm_bar.set_description(f'epoch: {i:1} train_loss: {training_loss.item():10.10f}' + f' val_loss: {validation_loss.item():10.10f}')
+#             w.writerow([i, training_loss.item(), validation_loss.item()])
+#             f.flush()
+#         f.close()
+#
+#         self.eval()
+#         self.packing_sequence = False
+#
+#         # At the end of training, save the final model.
+#         torch.save(self, "last_training_model.pth")
+#
+#         # Update itself with BEST weights foundfor each layer.
+#         self.load_state_dict(torch.load("best_model_state_dict.pth"))
+#
+#         self.eval()
+#
+#         # Returns the best model found so far.
+#         return torch.load("best_model.pth")
 
     def fit_dataloading(self):
         """
@@ -490,8 +490,8 @@ overflow the memory.
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size, device=self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size, device=self.device))
+                self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                                    torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -516,8 +516,8 @@ overflow the memory.
                 # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size, device=self.device),
-                                    torch.zeros(self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size, device=self.device))
+                self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                                    torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -846,7 +846,7 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = InertialModule(input_size=6, hidden_layer_size=100, n_lstm_units=1, bidirectional=False,
+    model = InertialModule(input_size=6, hidden_layer_size=10, n_lstm_units=1, bidirectional=False,
                            output_size=7, training_batch_size=1024, epochs=50, device=device)
     model.to(device)
 
