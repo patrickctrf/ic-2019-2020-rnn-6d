@@ -552,15 +552,16 @@ overflow the memory.
         # Returns the best model found so far.
         return torch.load("best_model.pth")
 
-    def load_feature_extractor(self):
+    def load_feature_extractor(self, freeze_pretrained_model=True):
         model = torch.load("best_model.pth")
 
         self.feature_extractor = model.feature_extractor
 
-        # print(self.feature_extractor)
-
-        for param in self.feature_extractor.parameters():
-            param.requires_grad = False
+        if freeze_pretrained_model is True:
+            # Congela todas as camadas do extrator para treinar apenas as camadas
+            # seguintes
+            for param in self.feature_extractor.parameters():
+                param.requires_grad = False
 
         return
 
@@ -856,6 +857,7 @@ Runs the experiment itself.
     model = InertialModule(input_size=6, hidden_layer_size=10, n_lstm_units=1, bidirectional=False,
                            output_size=7, training_batch_size=1024, epochs=50, device=device)
 
+    # Carrega o extrator de features convolucional pretreinado e congela (grad)
     model.load_feature_extractor()
 
     model.to(device)
@@ -886,11 +888,12 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    model.fit_dataloading()
+    # model.fit_dataloading()
 
-    model = torch.load("best_model.pth")
+    model = torch.load("modelos_neuron/lstm+conv-best_model.pth")
     model.eval()
 
+# ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]================
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
 
@@ -900,6 +903,8 @@ Runs the experiment itself.
     predict = []
     reference = []
     for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
+        model.hidden_cell = (torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device),
+                             torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
         y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
         predict.append(y_hat.detach().cpu().numpy())
         reference.append(y.detach().cpu().numpy())
@@ -914,6 +919,8 @@ Runs the experiment itself.
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.savefig(dim_name + ".png", dpi=200)
         # plt.show()
+
+# ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=========
 
     error_scores = []
 
