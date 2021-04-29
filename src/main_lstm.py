@@ -6,7 +6,7 @@ from math import sin, cos
 import numpy
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, save, savez, concatenate, ones, where, array, load
+from numpy import arange, random, save, savez, concatenate, ones, where, array, load, vectorize
 from pandas import read_csv
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
@@ -14,11 +14,14 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from torch import nn, movedim
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
-from torch.utils.data import Subset
+from torch.utils.data import Subset, DataLoader
 from tqdm import tqdm
 
+from mydatasets import *
 from ptk.timeseries import *
 from ptk.utils import *
+# create a differenced series
+from src.mydatasets import PlotLstmDataset
 
 
 # def fake_position(x):
@@ -51,8 +54,6 @@ from ptk.utils import *
 #
 #     return 4 * cos(2 * x) - sin(x)
 
-
-# create a differenced series
 
 def fake_position(x):
     """
@@ -786,7 +787,7 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
         # longas (com o tamanho do dataset inteiro).
         for x, y in list(zip(x_chunks, y_chunks)):
             # Fazemos o carregamento correto no formato de serie temporal
-            X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=False, sampling_window_size=interval)
+            X, y = timeseries_split(data_x=x, data_y=y, enable_asymetrical=False, sampling_window_size=interval)
             # Um ajuste na dimensao do y pois prevemos so o proximo passo.
             y = y.reshape(-1, 7)
 
@@ -893,34 +894,88 @@ Runs the experiment itself.
     model = torch.load("modelos_neuron/lstm+conv-best_model.pth")
     model.eval()
 
-# ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]================
-    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                     min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
+    # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
+    # room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+    #                                                  min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
+    #
+    # predict = []
+    # reference = []
+    # for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
+    #     model.hidden_cell = (torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device),
+    #                          torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
+    #     y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
+    #     predict.append(y_hat.detach().cpu().numpy())
+    #     reference.append(y.detach().cpu().numpy())
+    #
+    # predict = array(predict)
+    # reference = array(reference)
+    #
+    # dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
+    # for i, dim_name in enumerate(dimensoes):
+    #     plt.close()
+    #     plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
+    #     plt.legend(['predict', 'reference'], loc='upper right')
+    #     plt.savefig(dim_name + ".png", dpi=200)
+    #     # plt.show()
 
-    # room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-    #                                            min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=True)
+    # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
+
+    # ===========PREDICAO-TRAJETORIO-INTEIRA====================================
+    input_data = read_csv("dataset-room2_512_16/mav0/imu0/data.csv").to_numpy()
+    output_data = read_csv("dataset-room2_512_16/mav0/mocap0/data.csv").to_numpy()
+
+    # =========SCALING======================================================
+    # features without timestamp (we do not scale timestamp)
+    input_features = input_data[:, 1:]
+    output_features = output_data[:, 1:]
+
+    # Scaling data
+    input_scaler = StandardScaler()
+    input_features = input_scaler.fit_transform(input_features)
+    output_scaler = MinMaxScaler()
+    output_features = output_scaler.fit_transform(output_features)
+
+    # Replacing scaled data (we kept the original TIMESTAMP)
+    input_data[:, 1:] = input_features
+    output_data[:, 1:] = output_features
+    # =========end-SCALING==================================================
+
+    # Save timestamps for syncing samples.
+    input_timestamp = input_data[:, 0]
+    output_timestamp = output_data[:, 0]
 
     predict = []
-    reference = []
-    for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
-        model.hidden_cell = (torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device),
-                             torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
-        y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
-        predict.append(y_hat.detach().cpu().numpy())
-        reference.append(y.detach().cpu().numpy())
+    offset = 40  # offset_for_convolution_kernel
 
-    predict = array(predict)
-    reference = array(reference)
+    dataset = PlotLstmDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", shuffle=False, device=device, convert_first=True,
+                              zeros_tuple=(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size))
+
+    dataloader = DataLoader(dataset, pin_memory=True)
+
+    datamanager = DataManager(dataloader, device=device, buffer_size=1)
+
+    predict = torch.zeros((len(datamanager), 1, 7)).to(model.device)
+
+    with torch.no_grad():
+        for i, (x, _) in tqdm(enumerate(datamanager), total=len(datamanager)):
+            model.hidden_cell = (torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device),
+                                 torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
+            predict[i] = model(x)
+
+    detach_func = vectorize(lambda k: k.view(-1).detach().cpu().numpy())
+
+    predict = detach_func(array(predict.numpy()))
+    save("predictions.npy", predict)
 
     dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
     for i, dim_name in enumerate(dimensoes):
         plt.close()
-        plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
-        plt.legend(['predict', 'reference'], loc='upper right')
-        plt.savefig(dim_name + ".png", dpi=200)
-        # plt.show()
+    plt.plot(input_timestamp[1 + offset:], predict[:, i], output_timestamp, output_data[:, i])
+    plt.legend(['predict', 'reference'], loc='upper right')
+    plt.savefig(dim_name + "_inteira.png", dpi=200)
+    # plt.show()
 
-# ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=========
+    # ===========fim-de-PREDICAO-TRAJETORIO-INTEIRA=============================
 
     error_scores = []
 
@@ -938,36 +993,6 @@ if __name__ == '__main__':
         dev = "cpu"
         print("Usando CPU")
     device = torch.device(dev)
-
-    # dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv",
-    #                                        y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-    #                                        convert_first=True)
-
-    # print("abrindo dataset")
-    # t0 = time()
-    # room2_tum_dataset = GenericDatasetFromFiles(data_path="../drive/My Drive/PODE APAGAR/dataset-tum-room2/", convert_first=True, device=device)
-    # print("tempo abrindo dataset:", time() - t0)
-    #
-    # print("abrindo loader")
-    # train_loader = PackingSequenceDataloader(room2_tum_dataset, batch_size=128, shuffle=True)
-    # loader_iterable = iter(train_loader)
-    #
-    # print("abrindo manager")
-    # train_manager = iter(DataManager(train_loader, device=device, buffer_size=3))
-    #
-    # while True:
-    #     print("esperando")
-    #     sleep(1)
-    #     t0 = time()
-    #     x = next(train_manager)
-    #     print("tempo de resposta manager:", time() - t0)
-
-    # aux = zeros((1000,))
-    # for i in tqdm(dataset):
-    #     aux[i[0].shape[0]] += 1
-    #
-    # plt.plot(aux)
-    # plt.show()
 
     experiment(1)
 

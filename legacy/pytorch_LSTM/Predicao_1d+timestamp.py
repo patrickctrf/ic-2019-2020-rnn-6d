@@ -532,7 +532,7 @@ Runs the experiment itself.
     diff_pos = diff_pos.reshape(-1)
 
     # raw_accel
-    X, y = timeseries_dataloader(data_x=transpose(vstack((diff_timestamp, raw_accel))), data_y=diff_pos, enable_asymetrical=True)
+    X, y = timeseries_split(data_x=transpose(vstack((diff_timestamp, raw_accel))), data_y=diff_pos, enable_asymetrical=True)
 
     model = LSTM(input_size=1, hidden_layer_size=80, n_lstm_units=3, bidirectional=False,
                  output_size=1, training_batch_size=60, epochs=7500, device=device)

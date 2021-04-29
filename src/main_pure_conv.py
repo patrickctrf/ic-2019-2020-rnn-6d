@@ -780,7 +780,7 @@ O formato de dataset esperado eh o dataset visual-inercial da TUM.
         # longas (com o tamanho do dataset inteiro).
         for x, y in list(zip(x_chunks, y_chunks)):
             # Fazemos o carregamento correto no formato de serie temporal
-            X, y = timeseries_dataloader(data_x=x, data_y=y, enable_asymetrical=False, sampling_window_size=interval)
+            X, y = timeseries_split(data_x=x, data_y=y, enable_asymetrical=False, sampling_window_size=interval)
             # Um ajuste na dimensao do y pois prevemos so o proximo passo.
             y = y.reshape(-1, 7)
 

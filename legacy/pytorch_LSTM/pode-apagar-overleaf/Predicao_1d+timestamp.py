@@ -483,7 +483,7 @@ Runs the experiment itself.
     raw_accel = raw_accel.reshape(-1)
     diff_pos = diff_pos.reshape(-1)
 
-    X, y = timeseries_dataloader(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
+    X, y = timeseries_split(data_x=raw_accel, data_y=diff_pos, enable_asymetrical=True)
 
     # Invertendo para a sequencia ser DEcrescente.
     # X = X[::-1]
