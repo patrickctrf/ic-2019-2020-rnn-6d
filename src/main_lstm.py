@@ -20,8 +20,6 @@ from tqdm import tqdm
 from mydatasets import *
 from ptk.timeseries import *
 from ptk.utils import *
-# create a differenced series
-from src.mydatasets import PlotLstmDataset
 
 
 # def fake_position(x):
@@ -950,6 +948,9 @@ Runs the experiment itself.
     dataset = PlotLstmDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", shuffle=False, device=device, convert_first=True,
                               zeros_tuple=(model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size))
 
+    # Para ficar mais rapido e nao estourar a memoria, iremos so ate a metade
+    dataset.length = int(dataset.length // 2.5)
+
     dataloader = DataLoader(dataset, pin_memory=True)
 
     datamanager = DataManager(dataloader, device=device, buffer_size=1)
@@ -962,17 +963,17 @@ Runs the experiment itself.
                                  torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
             predict[i] = model(x)
 
-    detach_func = vectorize(lambda k: k.view(-1).detach().cpu().numpy())
-
-    predict = detach_func(array(predict.numpy()))
+    predict = predict.view(predict.shape[0], -1).detach().cpu().numpy()
     save("predictions.npy", predict)
+
+    predict = load("predictions.npy")
 
     dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
     for i, dim_name in enumerate(dimensoes):
         plt.close()
-    plt.plot(input_timestamp[1 + offset:], predict[:, i], output_timestamp, output_data[:, i])
-    plt.legend(['predict', 'reference'], loc='upper right')
-    plt.savefig(dim_name + "_inteira.png", dpi=200)
+        plt.plot(input_timestamp[1 + offset:][:predict.shape[0]], predict[:, i], output_timestamp, output_data[:, i])
+        plt.legend(['predict', 'reference'], loc='upper right')
+        plt.savefig(dim_name + "_inteira.png", dpi=200)
     # plt.show()
 
     # ===========fim-de-PREDICAO-TRAJETORIO-INTEIRA=============================
