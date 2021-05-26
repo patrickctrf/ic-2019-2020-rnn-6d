@@ -893,28 +893,28 @@ Runs the experiment itself.
     model.eval()
 
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
-    # room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-    #                                                  min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
-    #
-    # predict = []
-    # reference = []
-    # for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
-    #     model.hidden_cell = (torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device),
-    #                          torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
-    #     y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
-    #     predict.append(y_hat.detach().cpu().numpy())
-    #     reference.append(y.detach().cpu().numpy())
-    #
-    # predict = array(predict)
-    # reference = array(reference)
-    #
-    # dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
-    # for i, dim_name in enumerate(dimensoes):
-    #     plt.close()
-    #     plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
-    #     plt.legend(['predict', 'reference'], loc='upper right')
-    #     plt.savefig(dim_name + ".png", dpi=200)
-    #     # plt.show()
+    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+                                                     min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
+
+    predict = []
+    reference = []
+    for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
+        model.hidden_cell = (torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device),
+                             torch.zeros((model.num_directions * model.n_lstm_units, 1, model.hidden_layer_size), device=device))
+        y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
+        predict.append(y_hat.detach().cpu().numpy())
+        reference.append(y.detach().cpu().numpy())
+
+    predict = array(predict)
+    reference = array(reference)
+
+    dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
+    for i, dim_name in enumerate(dimensoes):
+        plt.close()
+        plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
+        plt.legend(['predict', 'reference'], loc='upper right')
+        plt.savefig(dim_name + ".png", dpi=200)
+        # plt.show()
 
     # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 
