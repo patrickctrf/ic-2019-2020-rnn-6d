@@ -22,10 +22,10 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=10, n_lstm_units=1, bidirectional=False,
-                           output_size=7, training_batch_size=1024, epochs=50, device=device, validation_percent=0.2)
+                           output_size=7, training_batch_size=1024, epochs=15, device=device, validation_percent=0.2)
 
     # Carrega o extrator de features convolucional pretreinado e congela (grad)
-    model.load_feature_extractor()
+    # model.load_feature_extractor()
 
     model.to(device)
 
@@ -55,11 +55,11 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    # model.fit()
+    model.fit()
 
     model.eval()
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
-    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=200, max_window_size=201, shuffle=False, device=device, convert_first=True)
 
     predict = []

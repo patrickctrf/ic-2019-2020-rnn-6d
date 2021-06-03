@@ -91,11 +91,11 @@ error within CUDA.
         # Dropout2d zeroes whole convolution channels, while simple Dropout
         # get random elements and generate instability in training process.
 
-        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
+        self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 72), nn.LeakyReLU(), nn.BatchNorm1d(72), nn.Dropout(p=0.5),
-            nn.Linear(72, 32), nn.LeakyReLU(),
+            nn.Linear(pooling_output_size * n_output_features, 72), nn.LeakyReLU(), nn.BatchNorm1d(72),
+            # nn.Dropout(p=0.5), nn.Linear(72, 32), nn.LeakyReLU(),
             nn.Linear(32, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
@@ -160,11 +160,17 @@ overflow the memory.
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=True)
 
+        room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
+                                                   min_window_size=100, max_window_size=350, batch_size=8 * self.training_batch_size, shuffle=True)
+
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room2_tum_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * 0.001)))
 
         train_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * self.train_percentage), len(room2_tum_dataset)))
+
+        train_dataset = room2_tum_dataset
+        val_dataset = room3_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
@@ -193,11 +199,11 @@ overflow the memory.
             # Voltamos ao modo treino
             self.train()
             for j, (X, y) in enumerate(train_manager):
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                                    torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -216,22 +222,25 @@ overflow the memory.
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
 
-            # validando o modelo da forma correta
-            self.eval()
-            for j, (X, y) in enumerate(val_manager):
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                                    torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+            # Nao precisamos perder tempo calculando gradientes da loss durante
+            # a validacao
+            with torch.no_grad():
+                # validando o modelo no modo de evaluation
+                self.eval()
+                for j, (X, y) in enumerate(val_manager):
+                    # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                    # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                    # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                    # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                    #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
-                with autocast(enabled=self.use_amp):
-                    y_pred = self(X)
-                    single_loss = self.loss_function(y_pred, y)
+                    with autocast(enabled=self.use_amp):
+                        y_pred = self(X)
+                        single_loss = self.loss_function(y_pred, y)
 
-                # .item() converts to numpy and therefore detach pytorch gradient.
-                # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
-                validation_loss += single_loss.detach()
+                    # .item() converts to numpy and therefore detach pytorch gradient.
+                    # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
+                    validation_loss += single_loss.detach()
 
             # Tira a media das losses.
             validation_loss = validation_loss / (j + 1)
