@@ -5,7 +5,7 @@ from pandas import read_csv
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from tqdm import tqdm
 
-from src.models import *
+from models import *
 
 
 def experiment():

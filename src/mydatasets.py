@@ -126,7 +126,7 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
 
         # If we receive an index, return the sample.
         # Else, if receiving an slice or array, return an slice or array from the samples.
-        if isinstance(idx, int) or isinstance(idx, int64):
+        if not isinstance(idx, slice):
 
             if idx >= len(self) or idx < 0:
                 raise IndexError('Index out of range')
@@ -177,7 +177,7 @@ class BatchTimeseriesDataset(Dataset):
                                          shuffle=False)
 
         try:
-            tabela = load("tabela_elementos_dataset.npy")
+            tabela = load(str(x_csv_path) + "_tabela_elementos_dataset.npy")
 
         except FileNotFoundError as e:
             tabela = zeros((len(self.base_dataset),))
@@ -185,7 +185,7 @@ class BatchTimeseriesDataset(Dataset):
             for element in tqdm(self.base_dataset):
                 tabela[i] = element[0].shape[0]
                 i = i + 1
-            save("tabela_elementos_dataset.npy", tabela)
+            save(str(x_csv_path) + "_tabela_elementos_dataset.npy", tabela)
 
         # dict_count = Counter(tabela)
         # ocorrencias = array(list(dict_count.values()))

@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from mydatasets import *
 from ptk.timeseries import *
-from src.models import InertialModule
+from models import InertialModule
 
 
 def experiment():
