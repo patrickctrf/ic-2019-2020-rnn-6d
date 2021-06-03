@@ -3,10 +3,10 @@ import time
 from threading import Thread, Event
 
 import torch
-from numpy import arange, asarray, absolute
+from numpy import arange
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
-from torch import nn, movedim
+from torch import nn, movedim, absolute
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
 from torch.utils.data import Subset
@@ -14,6 +14,10 @@ from tqdm import tqdm
 
 from mydatasets import *
 from ptk.utils import *
+
+# When importing every models from this module, make sure only models are
+# imported
+__all__ = ["InertialModule", "IMUHandler"]
 
 
 class InertialModule(nn.Module):
@@ -440,8 +444,8 @@ need to call this object.start() to begin updating positions in another thread.
         :param imu_input_size: (Integer) How many features IMU give to us. Default = 6 (ax, ay, az, wx, wq, wz).
         :param position_output_size: (Integer) How many features we use to represent our position annotation. Default = 7 (px, py, pz, qw, qx, qy, qz).
         """
-        super(nn.Module, self).__init__()
-        super(Thread, self).__init__()
+        nn.Module.__init__(self)
+        Thread.__init__(self)
         self.sampling_window_size = sampling_window_size
         self._imu_input_size = imu_input_size
         self._position_output_size = position_output_size
@@ -452,18 +456,28 @@ need to call this object.start() to begin updating positions in another thread.
         # position if new IMU samples have arrived.
         self._imu_samples_arrived = Event()
 
+        # Indicate for clients that our position predictions have been updated.
+        self.new_predictions_arrived = Event()
+
         # A control flag ordering this thread to stop.
         self.stop_flag = False
 
         # Here we are gonna store previous IMU samples and our estimated
         # positions at that time. Also, we need a timestamp info to synchronize
         # them. These buffers will grow as new samples and predictions arrive.
-        self.imu_buffer = torch.zeros((1, 1 + imu_input_size,),
-                                      dtype=self.data_type,
-                                      device=self.device)
         self.predictions_buffer = torch.zeros((1, 1 + position_output_size,),
                                               dtype=self.data_type,
-                                              device=self.device)
+                                              device=self.device,
+                                              requires_grad=False)
+        # First dimension will always be 1, because of batch dimension.
+        self.imu_buffer = torch.zeros((1, 1, 1 + imu_input_size,),
+                                      dtype=self.data_type,
+                                      device=self.device,
+                                      requires_grad=False)
+
+        # This avoids recalculating these thresholds.
+        self._imu_buffer_size_limit = 2 * sampling_window_size
+        self._imu_buffer_reduction_threshold = int(1.5 * sampling_window_size)
 
         # ========DEFAULT-PREDICTOR-FOR-COMPATIBILITY===========================
         # Here we define a default InertialModule component, but your are
@@ -484,7 +498,7 @@ need to call this object.start() to begin updating positions in another thread.
         self.dense_network = Sequential(
             nn.Linear(pooling_output_size * n_output_features, 72), nn.LeakyReLU(), nn.BatchNorm1d(72), nn.Dropout(p=0.5),
             nn.Linear(72, 32), nn.LeakyReLU(),
-            nn.Linear(32, self.output_size)
+            nn.Linear(32, position_output_size)
         )
         # ========end-of-DEFAULT-PREDICTOR-FOR-COMPATIBILITY====================
 
@@ -545,10 +559,35 @@ timestamp indicating the time that position was estimated.
 
         :return: Tuple with (Tensor (1x7) containing latest position update; Respective position time reference).
         """
+        if self.predictions_buffer.shape[0] > 3 * self.sampling_window_size:
+            self.predictions_buffer = \
+                self.predictions_buffer[-2 * self.sampling_window_size:]
+
+        self.new_predictions_arrived.clear()
         # Return the last position update and drop out the associated timestamp.
         return self.predictions_buffer[-1, 1:], self.predictions_buffer[-1, 0]
 
-    def push_imu_sample_to_buffer(self, sample):
+    def set_initial_position(self, position, timestamp=time.time()):
+        """
+    This Handler calculates position according to displacement from initial
+    position. It gives you absolute position estimatives if the initial
+    position is set according to your global reference.
+
+        :param position: Starting position (px, py, pz, qw, qx, qy, qz).
+        """
+
+        position = torch.tensor(position, device=self.device,
+                                dtype=self.data_type, requires_grad=False)
+
+        timestamp = torch.tensor(timestamp, device=self.device,
+                                 dtype=self.data_type, requires_grad=False)
+
+        self.predictions_buffer[0, 1:] = position
+        self.predictions_buffer[0, 0:1] = timestamp
+
+        return
+
+    def push_imu_sample_to_buffer(self, sample, timestamp):
         """
 Stores a new IMU sample to the buffer, so it will be taken into account in next
 predictions.
@@ -556,47 +595,59 @@ predictions.
         :param sample: List or iterable containig 6 channels of IMU sample (ax, ay, az, wx, wq, wz).
         :return: Void.
         """
+
+        if self.imu_buffer.shape[1] > self._imu_buffer_size_limit:
+            self.imu_buffer = \
+                self.imu_buffer[0:, -self._imu_buffer_reduction_threshold:, :]
+
         self.imu_buffer = \
             torch.cat((self.imu_buffer,
-                       torch.tensor([time.time()] + list(sample),
-                                    dtype=self.data_type,
-                                    device=self.device)))
+                       torch.tensor([timestamp] + list(sample),
+                                    dtype=self.data_type, requires_grad=False,
+                                    device=self.device).view(1, 1, -1)
+                       ), dim=1)
 
         # Informs this thread that new samples have been generated.
         self._imu_samples_arrived.set()
 
         return
 
+    # This class is not intended to be used as training for the InertialModule
+    # first stage, so we disable grad for faster computation.
+    @torch.no_grad()
     def run(self):
 
         # We only can start predicting positions after we have the
-        # min_window_size IMU samples collected.
-        while self.imu_buffer.shape[0] < self.min_window_size:
+        # sampling_window_size IMU samples collected.
+        while self.imu_buffer.shape[1] < self.sampling_window_size:
             time.sleep(1)
+
+        # Put pytorch module into evaluation mode (batchnorm and dropout need).
+        self.eval()
 
         # If this thread is not stopped, continue updating position.
         while self.stop_flag is False:
             # Wait for IMU new readings
             self._imu_samples_arrived.wait()
 
-            # We check the timestamp of the last min_window_size reading and
+            # We check the timestamp of the last sampling_window_size reading and
             # search for the closest timestamp in prediction buffer.
             prediction_closest_timestamp, prediction_idx = \
                 IMUHandler.find_nearest(
                     self.predictions_buffer[:, 0],
-                    self.imu_buffer[-self.min_window_size, 0]
+                    self.imu_buffer[0, -self.sampling_window_size, 0]
                 )
 
             # We also need the prediction's closest reading, that may not be
-            # the one at min_window_size before
+            # the one at sampling_window_size before
             imu_closest_timestamp, imu_idx = \
                 IMUHandler.find_nearest(
-                    self.imu_buffer[:, 0],
+                    self.imu_buffer[0, :, 0],
                     prediction_closest_timestamp
                 )
 
             # We need to now for what time we are calculating position.
-            current_timestamp = self.imu_buffer[-1, 0]
+            current_timestamp = self.imu_buffer[0:, -1, 0:1]
 
             # Registers that there are no more NEW imu readings to process.
             self._imu_samples_arrived.clear()
@@ -606,9 +657,12 @@ predictions.
                     self.predictions_buffer,
                     torch.cat((
                         current_timestamp,
-                        self(self.imu_buffer[-imu_idx, 1:])
-                    ))
+                        self.predictions_buffer[prediction_idx, 1:] +
+                        self(self.imu_buffer[0:, imu_idx:, 1:])
+                    ), dim=1)
                 ))
+
+            self.new_predictions_arrived.set()
 
     @staticmethod
     def find_nearest(tensor_to_search, value):
