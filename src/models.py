@@ -94,9 +94,9 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 72), nn.LeakyReLU(), nn.BatchNorm1d(72),
-            # nn.Dropout(p=0.5), nn.Linear(72, 32), nn.LeakyReLU(),
-            nn.Linear(72, self.output_size)
+            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(72), nn.Dropout(p=0.5),
+            nn.Linear(128, 128), nn.LeakyReLU(),
+            nn.Linear(128, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -158,10 +158,10 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=True)
+                                                   min_window_size=175, max_window_size=225, batch_size=self.training_batch_size, shuffle=True)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=100, max_window_size=350, batch_size=8 * self.training_batch_size, shuffle=True)
+                                                   min_window_size=175, max_window_size=225, batch_size=4 * self.training_batch_size, shuffle=True)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room2_tum_dataset = Subset(room2_tum_dataset, arange(int(len(room2_tum_dataset) * 0.001)))
@@ -192,7 +192,7 @@ overflow the memory.
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
             train_manager = DataManager(train_loader, device=self.device, buffer_size=1)
-            val_manager = DataManager(val_loader, device=self.device, buffer_size=1)
+            val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
             training_loss = 0
             validation_loss = 0
             self.optimizer.zero_grad()
