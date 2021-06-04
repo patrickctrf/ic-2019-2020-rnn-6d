@@ -177,7 +177,7 @@ class BatchTimeseriesDataset(Dataset):
                                          shuffle=False)
 
         try:
-            tabela = load(str(max_window_size) + str(min_window_size) + str(x_csv_path) + "_tabela_elementos_dataset.npy")
+            tabela = load(str(max_window_size) + str(min_window_size) + str(x_csv_path).replace("/", "_") + "_tabela_elementos_dataset.npy")
 
         except FileNotFoundError as e:
             print("Indexing dataset samples:")
@@ -186,7 +186,7 @@ class BatchTimeseriesDataset(Dataset):
             for element in tqdm(self.base_dataset):
                 tabela[i] = element[0].shape[0]
                 i = i + 1
-            save(str(max_window_size) + str(min_window_size) + str(x_csv_path) + "_tabela_elementos_dataset.npy", tabela)
+            save(str(max_window_size) + str(min_window_size) + str(x_csv_path).replace("/", "_") + "_tabela_elementos_dataset.npy", tabela)
 
         # dict_count = Counter(tabela)
         # ocorrencias = array(list(dict_count.values()))
