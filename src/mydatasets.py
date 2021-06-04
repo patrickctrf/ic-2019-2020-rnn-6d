@@ -206,10 +206,16 @@ class BatchTimeseriesDataset(Dataset):
         # mesmo tamanho talvez nao seja um multiplo inteiro do batch_size
         # escolhido
         for i in range(tabela.min().astype("int"), tabela.max().astype("int") + 1):
-            self.lista_de_arrays_com_mesmo_comprimento.extend(
-                array_split(where(tabela == i)[0],
-                            where(tabela == i)[0].shape[0] // self.batch_size + (where(tabela == i)[0].shape[0] % self.batch_size > 0))
-            )
+            if where(tabela == i)[0].shape[0] // self.batch_size + (where(tabela == i)[0].shape[0] % self.batch_size > 0) <= 1:
+                # Se nao houver nenhuma sample daquele tamanho, pule a iteracao
+                # Se houver so 1 sample, pularemos tambem, porque a Batchnorm
+                # buga e um batch com so 1 sample eh instavel demais
+                pass
+            else:
+                self.lista_de_arrays_com_mesmo_comprimento.extend(
+                    array_split(where(tabela == i)[0],
+                                where(tabela == i)[0].shape[0] // self.batch_size + (where(tabela == i)[0].shape[0] % self.batch_size > 0))
+                )
 
         self.length = len(self.lista_de_arrays_com_mesmo_comprimento)
 
