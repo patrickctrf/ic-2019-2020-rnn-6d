@@ -98,7 +98,7 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(256, affine=False),
+            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(128, affine=False),
             # nn.Dropout(p=0.5),
             nn.Linear(128, 128), nn.LeakyReLU(),
             nn.BatchNorm1d(128, affine=False),
