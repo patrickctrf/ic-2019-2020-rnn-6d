@@ -79,29 +79,29 @@ error within CUDA.
 
         pooling_output_size = 100
         n_base_filters = 128
-        n_output_features = 200
+        n_output_features = 256
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=False),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=False),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters, affine=False),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
-                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features, affine=False)
+                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=True),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters, affine=True),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
+                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.Tanh(), nn.BatchNorm1d(n_output_features, affine=True)
             )  # We need to apply Dropout2d instead of Dropout.
         # Dropout2d zeroes whole convolution channels, while simple Dropout
         # get random elements and generate instability in training process.
 
-        self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
+        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(128, affine=False),
-            # nn.Dropout(p=0.5),
+            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(128, affine=True),
+            nn.Dropout(p=0.5),
             nn.Linear(128, 128), nn.LeakyReLU(),
-            nn.BatchNorm1d(128, affine=False),
+            # nn.BatchNorm1d(128, affine=True),
             nn.Linear(128, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
