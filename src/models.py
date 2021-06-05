@@ -82,11 +82,11 @@ error within CUDA.
         n_output_features = 200
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features)
+                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=False),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=False),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters, affine=False),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
+                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features, affine=False)
             )  # We need to apply Dropout2d instead of Dropout.
         # Dropout2d zeroes whole convolution channels, while simple Dropout
         # get random elements and generate instability in training process.
@@ -94,9 +94,9 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 1024), nn.LeakyReLU(), nn.BatchNorm1d(1024), nn.Dropout(p=0.5),
-            nn.Linear(1024, 1024), nn.LeakyReLU(),
-            nn.Linear(1024, self.output_size)
+            nn.Linear(pooling_output_size * n_output_features, 256), nn.LeakyReLU(), nn.BatchNorm1d(256, affine=False), nn.Dropout(p=0.5),
+            nn.Linear(256, 256), nn.LeakyReLU(),
+            nn.Linear(256, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -158,10 +158,10 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=175, max_window_size=225, batch_size=self.training_batch_size, shuffle=True, noise=(0, 0.1))
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=True, noise=(0, 0.01))
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=175, max_window_size=225, batch_size=4 * self.training_batch_size, shuffle=True)
+                                                   min_window_size=150, max_window_size=200, batch_size=4 * self.training_batch_size, shuffle=True)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
