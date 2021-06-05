@@ -78,7 +78,7 @@ error within CUDA.
         self.optimizer = None
 
         pooling_output_size = 100
-        n_base_filters = 72
+        n_base_filters = 128
         n_output_features = 200
         self.feature_extractor = \
             Sequential(
@@ -94,9 +94,9 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(128), # nn.Dropout(p=0.5),
-            nn.Linear(128, 128), nn.LeakyReLU(),
-            nn.Linear(128, self.output_size)
+            nn.Linear(pooling_output_size * n_output_features, 1024), nn.LeakyReLU(), nn.BatchNorm1d(1024), nn.Dropout(p=0.5),
+            nn.Linear(1024, 1024), nn.LeakyReLU(),
+            nn.Linear(1024, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
