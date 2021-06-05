@@ -67,7 +67,8 @@ Intended to be used as iterator.
 
 class AsymetricalTimeseriesDataset(Dataset):
 
-    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, noise=None, convert_first=False, device=torch.device("cpu"), shuffle=True):
+    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, noise=None, convert_first=False, device=torch.device("cpu"), shuffle=True,
+                 reference_x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", reference_y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv"):
         super().__init__()
         self.input_data = read_csv(x_csv_path).to_numpy()
         self.output_data = read_csv(y_csv_path).to_numpy()
@@ -82,7 +83,10 @@ class AsymetricalTimeseriesDataset(Dataset):
         output_features = self.output_data[:, 1:]
 
         # Scaling data
-        self.input_scaler, self.output_scaler = AsymetricalTimeseriesDataset.get_reference_scaler()
+        self.input_scaler, self.output_scaler = \
+            AsymetricalTimeseriesDataset.get_reference_scaler(
+                reference_x_csv_path, reference_y_csv_path
+            )
         input_features = self.input_scaler.transform(input_features)
         output_features = self.output_scaler.transform(output_features)
 
