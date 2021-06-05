@@ -9,7 +9,7 @@ from sklearn.metrics import make_scorer
 from torch import nn, movedim, absolute
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
-from torch.utils.data import Subset
+from torch.utils.data import Subset, ConcatDataset
 from tqdm import tqdm
 
 from mydatasets import *
@@ -86,6 +86,10 @@ error within CUDA.
                 Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=False),
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters, affine=False),
                 Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=False),
                 Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features, affine=False)
             )  # We need to apply Dropout2d instead of Dropout.
         # Dropout2d zeroes whole convolution channels, while simple Dropout
@@ -94,9 +98,11 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 256), nn.LeakyReLU(), nn.BatchNorm1d(256, affine=False), nn.Dropout(p=0.5),
-            nn.Linear(256, 256), nn.LeakyReLU(),
-            nn.Linear(256, self.output_size)
+            nn.Linear(pooling_output_size * n_output_features, 128), nn.LeakyReLU(), nn.BatchNorm1d(256, affine=False),
+            # nn.Dropout(p=0.5),
+            nn.Linear(128, 128), nn.LeakyReLU(),
+            nn.BatchNorm1d(128, affine=False),
+            nn.Linear(128, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -163,13 +169,25 @@ overflow the memory.
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=4 * self.training_batch_size, shuffle=True)
 
+        room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=True)
+
+        room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=True)
+
+        room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=True)
+
+        room6_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv",
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=True)
+
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
 
         train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = room1_tum_dataset
+        train_dataset = ConcatDataset((room1_tum_dataset, room3_tum_dataset, room4_tum_dataset, room5_tum_dataset))
         val_dataset = room2_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
