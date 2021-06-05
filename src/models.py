@@ -158,9 +158,9 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=175, max_window_size=225, batch_size=self.training_batch_size, shuffle=True)
+                                                   min_window_size=175, max_window_size=225, batch_size=self.training_batch_size, shuffle=True, noise=(0, 0.1))
 
-        room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
+        room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=175, max_window_size=225, batch_size=4 * self.training_batch_size, shuffle=True)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts

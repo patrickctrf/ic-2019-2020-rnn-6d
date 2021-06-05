@@ -66,13 +66,15 @@ Intended to be used as iterator.
 
 
 class AsymetricalTimeseriesDataset(Dataset):
-    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, convert_first=False, device=torch.device("cpu"), shuffle=True):
+
+    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, noise=None, convert_first=False, device=torch.device("cpu"), shuffle=True):
         super().__init__()
         self.input_data = read_csv(x_csv_path).to_numpy()
         self.output_data = read_csv(y_csv_path).to_numpy()
         self.min_window_size = min_window_size
         self.convert_first = convert_first
         self.device = device
+        self.noise = noise
 
         # =========SCALING======================================================
         # features without timestamp (we do not scale timestamp)
@@ -80,10 +82,9 @@ class AsymetricalTimeseriesDataset(Dataset):
         output_features = self.output_data[:, 1:]
 
         # Scaling data
-        self.input_scaler = StandardScaler()
-        input_features = self.input_scaler.fit_transform(input_features)
-        self.output_scaler = MinMaxScaler()
-        output_features = self.output_scaler.fit_transform(output_features)
+        self.input_scaler, self.output_scaler = AsymetricalTimeseriesDataset.get_reference_scaler()
+        input_features = self.input_scaler.transform(input_features)
+        output_features = self.output_scaler.transform(output_features)
 
         # Replacing scaled data (we kept the original TIMESTAMP)
         self.input_data[:, 1:] = input_features
@@ -145,6 +146,11 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             x = self.input_data[x_start_idx: x_finish_idx + 1]
             y = self.output_data[window_start_idx + window_size] - self.output_data[window_start_idx]
 
+            # We add gaussian noise to data, if configured to.
+            if self.noise is not None:
+                x = x + random.normal(loc=self.noise[0], scale=self.noise[1], size=x.shape)
+                y = y + random.normal(loc=self.noise[0], scale=self.noise[1], size=y.shape)
+
             # If we want to convert into torch tensors first
             if self.convert_first is True:
                 return from_numpy(x.astype("float32")).to(self.device), \
@@ -161,9 +167,35 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
     def __len__(self):
         return self.length
 
+    @staticmethod
+    def get_reference_scaler(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv"):
+        """
+    We need to work with fixed scalers, so we can reproduce results. Thus
+    we need to keep them saved or to recalculate them over a referecne
+    dataset. In both cases, this method will help you.
+
+        :return: (input_scaler, output_scaler)
+        """
+
+        input_data = read_csv(x_csv_path).to_numpy()
+        output_data = read_csv(y_csv_path).to_numpy()
+
+        # =========SCALING======================================================
+        # features without timestamp (we do not scale timestamp)
+        input_features = input_data[:, 1:]
+        output_features = output_data[:, 1:]
+
+        # Scaling data
+        input_scaler = StandardScaler()
+        input_scaler.fit(input_features)
+        output_scaler = StandardScaler()
+        output_scaler.fit(output_features)
+
+        return input_scaler, output_scaler
+
 
 class BatchTimeseriesDataset(Dataset):
-    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1):
+    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1, noise=None):
         super().__init__()
         self.batch_size = batch_size
 
@@ -174,7 +206,8 @@ class BatchTimeseriesDataset(Dataset):
                                          min_window_size=min_window_size,
                                          convert_first=True,
                                          device=torch.device("cpu"),
-                                         shuffle=False)
+                                         shuffle=False,
+                                         noise=noise)
 
         try:
             tabela = load(str(max_window_size) + str(min_window_size) +
@@ -199,13 +232,14 @@ class BatchTimeseriesDataset(Dataset):
         # mesmo comprimento.
         self.lista_de_arrays_com_mesmo_comprimento = []
 
+        print("Loading sample info...")
         # grupos de arrays com mesmo comprimento.
         # Eles serao separados em batches, entao alguns
         # batches sao de arrays com mesmo comprimento que outros. Alguns
         # batches serao um pouco maiores, pois a quantidade de elementos com o
         # mesmo tamanho talvez nao seja um multiplo inteiro do batch_size
         # escolhido
-        for i in range(tabela.min().astype("int"), tabela.max().astype("int") + 1):
+        for i in tqdm(range(tabela.min().astype("int"), tabela.max().astype("int") + 1)):
             if where(tabela == i)[0].shape[0] // self.batch_size + (where(tabela == i)[0].shape[0] % self.batch_size > 0) <= 1:
                 # Se nao houver nenhuma sample daquele tamanho, pule a iteracao
                 # Se houver so 1 sample, pularemos tambem, porque a Batchnorm
