@@ -97,9 +97,6 @@ error within CUDA.
                 Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
                 Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
                 Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
                 Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features, affine=True)
             )  # We need to apply Dropout2d instead of Dropout.
         # Dropout2d zeroes whole convolution channels, while simple Dropout
