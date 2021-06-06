@@ -78,7 +78,7 @@ error within CUDA.
         self.optimizer = None
 
         pooling_output_size = 100
-        n_base_filters = 128
+        n_base_filters = 64
         n_output_features = 256
         self.feature_extractor = \
             Sequential(
