@@ -19,6 +19,7 @@ Runs the experiment itself.
     imu_handler = IMUHandler(sampling_window_size=sampling_window_size, device=device, data_type=torch.double)
     imu_handler.load_feature_extractor()
     imu_handler.double()
+    imu_handler.to(device)
 
     # ===========PREDICAO-TRAJETORIO-INTEIRA====================================
     input_data = read_csv("dataset-room2_512_16/mav0/imu0/data.csv").to_numpy()
