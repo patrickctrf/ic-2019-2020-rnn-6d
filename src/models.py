@@ -22,7 +22,7 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer"]
 
 class ResBlock(nn.Module):
     def __init__(self, n_input_channels=6, n_output_channels=7,
-                 kernel_size=(7,), stride=(1,), padding=(0,), dilation=(1,),
+                 kernel_size=(7,), stride=(1,), padding=0, dilation=(1,),
                  groups=1, bias=True, padding_mode='replicate'):
         """
     ResNet-like block, receives as arguments the same that PyTorch's Conv1D
