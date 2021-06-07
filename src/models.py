@@ -141,7 +141,7 @@ error within CUDA.
                 ResBlock(2 * n_base_filters, n_output_features, (7,))
             )
 
-        self.sum_layer = SumLayer()
+        self.sum_layer = SumLayer(n_output_features)
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
