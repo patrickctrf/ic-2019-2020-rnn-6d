@@ -17,7 +17,7 @@ from ptk.utils import *
 
 # When importing every models from this module, make sure only models are
 # imported
-__all__ = ["InertialModule", "IMUHandler", "ResBlock"]
+__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer"]
 
 
 class ResBlock(nn.Module):
@@ -65,7 +65,7 @@ class SumLayer(nn.Module):
         self.bn1 = nn.BatchNorm1d(n_input_channels)
 
     def forward(self, input_seq):
-        return self.bn1(torch.sum(input_seq, dim=-1))
+        return self.bn1(torch.sum(input_seq, dim=-1, keepdim=True))
 
 
 class InertialModule(nn.Module):
@@ -125,31 +125,23 @@ error within CUDA.
         self.loss_function = None
         self.optimizer = None
 
-        pooling_output_size = 100
-        n_base_filters = 64
+        # ATTENTION: You cannot change this anymore, since w added a sum layer
+        # and it casts conv outputs to 1 feature per channel
+        pooling_output_size = 1
+
+        n_base_filters = 128
         n_output_features = 256
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                # Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
-                # Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(3 * n_base_filters, affine=True),
-                # Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters, affine=True),
-                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features, affine=True)
-            )  # We need to apply Dropout2d instead of Dropout.
-        # Dropout2d zeroes whole convolution channels, while simple Dropout
-        # get random elements and generate instability in training process.
+                Conv1d(input_size, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
+                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
+                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
+                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
+                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
+                ResBlock(2 * n_base_filters, n_output_features, (7,))
+            )
 
+        self.sum_layer = SumLayer()
         self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
@@ -157,7 +149,7 @@ error within CUDA.
             # nn.Dropout(p=0.5),
             # nn.Linear(128, 128), nn.PReLU(),
             # # nn.BatchNorm1d(128, affine=True),
-            nn.Linear(pooling_output_size * n_output_features, self.output_size)
+            nn.Linear(2 * pooling_output_size * n_output_features, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -199,9 +191,13 @@ input sequence and returns the prediction for the final step.
         #
         # predictions = self.linear(lstm_out)
 
-        input_seq = self.adaptive_pooling(input_seq)
+        output_seq = \
+            torch.cat(
+                (self.sum_layer(input_seq),
+                 self.adaptive_pooling(input_seq)),
+                dim=1)
 
-        predictions = self.dense_network(input_seq.view(input_seq.shape[0], -1))
+        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
 
         return predictions
 
