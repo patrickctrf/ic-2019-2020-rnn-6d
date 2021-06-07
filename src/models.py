@@ -17,7 +17,55 @@ from ptk.utils import *
 
 # When importing every models from this module, make sure only models are
 # imported
-__all__ = ["InertialModule", "IMUHandler"]
+__all__ = ["InertialModule", "IMUHandler", "ResBlock"]
+
+
+class ResBlock(nn.Module):
+    def __init__(self, n_input_channels=6, n_output_channels=7,
+                 kernel_size=(7,), stride=1, padding=0, dilation=1, groups=1,
+                 bias=True, padding_mode='replicate'):
+        """
+    ResNet-like block, receives as arguments the same that PyTorch's Conv1D
+    module.
+        """
+        super(ResBlock, self).__init__()
+
+        self.feature_extractor = \
+            Sequential(
+                Conv1d(n_input_channels, n_output_channels, kernel_size,
+                       stride, kernel_size[0] // 2 * dilation, dilation,
+                       groups, bias, padding_mode),
+                nn.PReLU(), nn.BatchNorm1d(n_output_channels),
+                Conv1d(n_output_channels, n_output_channels, kernel_size,
+                       stride, kernel_size[0] // 2 * dilation, dilation,
+                       groups, bias, padding_mode),
+                nn.PReLU(), nn.BatchNorm1d(n_output_channels)
+            )
+
+        self.bypass = \
+            Sequential(
+                Conv1d(n_input_channels, n_output_channels, (1,),
+                       stride, padding, dilation, groups, bias, padding_mode)
+            )
+
+    def forward(self, input_seq):
+        return self.feature_extractor(input_seq) + self.bypass(input_seq)
+
+
+class SumLayer(nn.Module):
+    def __init__(self, n_input_channels):
+        """
+    This layer aims to sum the last dimension of a tensor and compute the batch
+    norm.
+
+        :param n_input_channels: How many channels in the entrying tensor.
+        """
+        super(ResBlock, self).__init__()
+
+        self.bn1 = nn.BatchNorm1d(n_input_channels)
+
+    def forward(self, input_seq):
+        return self.bn1(torch.sum(input_seq, dim=-1))
 
 
 class InertialModule(nn.Module):
