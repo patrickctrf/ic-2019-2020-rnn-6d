@@ -22,8 +22,8 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer"]
 
 class ResBlock(nn.Module):
     def __init__(self, n_input_channels=6, n_output_channels=7,
-                 kernel_size=(7,), stride=1, padding=0, dilation=1, groups=1,
-                 bias=True, padding_mode='replicate'):
+                 kernel_size=(7,), stride=(1,), padding=(0,), dilation=(1,),
+                 groups=1, bias=True, padding_mode='replicate'):
         """
     ResNet-like block, receives as arguments the same that PyTorch's Conv1D
     module.
@@ -37,19 +37,19 @@ class ResBlock(nn.Module):
                        groups, bias, padding_mode),
                 nn.PReLU(), nn.BatchNorm1d(n_output_channels),
                 Conv1d(n_output_channels, n_output_channels, kernel_size,
-                       stride, kernel_size[0] // 2 * dilation, dilation,
-                       groups, bias, padding_mode),
+                       stride, kernel_size[0] // 2 * dilation + padding,
+                       dilation, groups, bias, padding_mode),
                 nn.PReLU(), nn.BatchNorm1d(n_output_channels)
             )
 
-        self.bypass = \
+        self.skip_connection = \
             Sequential(
                 Conv1d(n_input_channels, n_output_channels, (1,),
                        stride, padding, dilation, groups, bias, padding_mode)
             )
 
     def forward(self, input_seq):
-        return self.feature_extractor(input_seq) + self.bypass(input_seq)
+        return self.feature_extractor(input_seq) + self.skip_connection(input_seq)
 
 
 class SumLayer(nn.Module):
@@ -133,10 +133,10 @@ error within CUDA.
         n_output_features = 256
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
+                Conv1d(input_size, 2 * n_base_filters, (9,), dilation=(2,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
                 # ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
-                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
-                ResBlock(2 * n_base_filters, n_output_features, (7,))
+                # ResBlock(2 * n_base_filters, 2 * n_base_filters, (9,), dilation=2, stride=1),
+                ResBlock(2 * n_base_filters, n_output_features, (9,), dilation=2, stride=1)
             )
 
         self.sum_layer = SumLayer(n_output_features)
