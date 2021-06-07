@@ -60,7 +60,7 @@ class SumLayer(nn.Module):
 
         :param n_input_channels: How many channels in the entrying tensor.
         """
-        super(ResBlock, self).__init__()
+        super(SumLayer, self).__init__()
 
         self.bn1 = nn.BatchNorm1d(n_input_channels)
 
