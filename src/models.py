@@ -136,13 +136,11 @@ error within CUDA.
                 Conv1d(input_size, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
                 ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
                 ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
-                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
-                ResBlock(2 * n_base_filters, 2 * n_base_filters, (7,)),
                 ResBlock(2 * n_base_filters, n_output_features, (7,))
             )
 
         self.sum_layer = SumLayer(n_output_features)
-        self.adaptive_pooling = nn.AdaptiveMaxPool1d(pooling_output_size)
+        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
             # nn.Linear(pooling_output_size * n_output_features, 128), nn.PReLU(), nn.BatchNorm1d(128, affine=True),
