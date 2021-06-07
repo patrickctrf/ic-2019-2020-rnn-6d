@@ -143,11 +143,11 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            # nn.Linear(pooling_output_size * n_output_features, 128), nn.PReLU(), nn.BatchNorm1d(128, affine=True),
+            nn.Linear(2 * pooling_output_size * n_output_features, 128), nn.PReLU(), nn.BatchNorm1d(128, affine=True),
             # nn.Dropout(p=0.5),
             # nn.Linear(128, 128), nn.PReLU(),
             # # nn.BatchNorm1d(128, affine=True),
-            nn.Linear(2 * pooling_output_size * n_output_features, self.output_size)
+            nn.Linear(128, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
