@@ -133,7 +133,7 @@ error within CUDA.
         n_output_features = 512
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
+                Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=True),
                 ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
                 ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
                 ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
