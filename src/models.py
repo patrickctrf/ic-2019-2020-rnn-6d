@@ -254,7 +254,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0001)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.1)
         scaler = GradScaler(enabled=self.use_amp)
 
         f = open("loss_log.csv", "w")
@@ -288,9 +288,12 @@ overflow the memory.
                 scaler.update()
                 self.optimizer.zero_grad()
 
-                # .item() converts to numpy and therefore detach pytorch gradient.
-                # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
-                training_loss += single_loss.detach()
+                # We need detach() to no accumulate gradient. Otherwise, memory
+                # overflow will happen.
+                # We divide by the size of batch because we dont need to
+                # compensate batch size when estimating average training loss,
+                # otherwise we woul get an explosive and incorrect loss value.
+                training_loss += single_loss.detach() / X.shape[0]
 
             # Tira a media das losses.
             training_loss = training_loss / (j + 1)
