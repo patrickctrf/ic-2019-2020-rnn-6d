@@ -136,17 +136,17 @@ error within CUDA.
                 # Conv1d(input_size, 2 * n_base_filters, (7,), dilation=(2,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
                 # ResBlock(2 * n_base_filters, n_output_features, (7,), dilation=2, stride=1),
                 Conv1d(input_size, 1 * n_base_filters, (5,), stride=(3,), dilation=(2,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(1 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features),
             )
 
         self.sum_layer = SumLayer(n_output_features)
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(pooling_output_size * n_output_features, 64), nn.LeakyReLU(), nn.BatchNorm1d(64, affine=True),
-            nn.Dropout(p=0.25),
-            nn.Linear(32, 32), nn.PReLU(),
-            # nn.BatchNorm1d(128, affine=True),
+            # nn.Linear(pooling_output_size * n_output_features, 32), nn.ReLU(), nn.BatchNorm1d(32, affine=True),
+            # nn.Dropout(p=0.25),
+            # nn.Linear(32, 32), nn.PReLU(),
+            # nn.BatchNorm1d(32, affine=True),
             nn.Linear(pooling_output_size * n_output_features, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
@@ -216,7 +216,7 @@ overflow the memory.
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=4 * self.training_batch_size, shuffle=False)
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
@@ -236,8 +236,8 @@ overflow the memory.
         train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = ConcatDataset((room1_tum_dataset, room3_tum_dataset, room4_tum_dataset, room5_tum_dataset))
-        val_dataset = room2_tum_dataset
+        train_dataset = ConcatDataset((room1_tum_dataset, room3_tum_dataset, room4_tum_dataset, room2_tum_dataset))
+        val_dataset = room5_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
