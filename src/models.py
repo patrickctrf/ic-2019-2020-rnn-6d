@@ -279,8 +279,9 @@ overflow the memory.
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
-                    # Repare que NAO ESTAMOS acumulando a LOSS.
-                    single_loss = self.loss_function(y_pred, y)
+                    # O peso do batch no calculo da loss eh proporcional ao seu
+                    # tamanho.
+                    single_loss = self.loss_function(y_pred, y) * X.shape[0]
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 scaler.scale(single_loss).backward()
                 scaler.step(self.optimizer)
