@@ -129,14 +129,19 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 128
-        n_output_features = 256
+        n_base_filters = 64
+        n_output_features = 512
         self.feature_extractor = \
             Sequential(
-                # Conv1d(input_size, 2 * n_base_filters, (7,), dilation=(2,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
-                # ResBlock(2 * n_base_filters, n_output_features, (7,), dilation=2, stride=1),
-                Conv1d(input_size, 1 * n_base_filters, (5,), stride=(3,), dilation=(2,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features),
+                Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters, affine=True),
+                ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
+                ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
+                ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
+                # Conv1d(input_size, 1 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters),
+                # Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters),
+                # Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(3 * n_base_filters),
+                # Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters),
+                # Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
