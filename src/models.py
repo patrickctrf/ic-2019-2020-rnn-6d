@@ -65,7 +65,7 @@ class SumLayer(nn.Module):
         self.bn1 = nn.BatchNorm1d(n_input_channels)
 
     def forward(self, input_seq):
-        return self.bn1(torch.sum(input_seq, dim=-1, keepdim=True))
+        return torch.sum(input_seq, dim=-1, keepdim=True)
 
 
 class InertialModule(nn.Module):
@@ -133,26 +133,26 @@ error within CUDA.
         n_output_features = 512
         self.feature_extractor = \
             Sequential(
-                Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=True),
-                ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
-                ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
-                ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
-                # Conv1d(input_size, 1 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                # Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters),
-                # Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(3 * n_base_filters),
-                # Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters),
-                # Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features)
+                # Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=True),
+                # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
+                # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
+                # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
+                Conv1d(input_size, 1 * n_base_filters, (7,)), nn.PReLU(), nn.Dropout2d(),  # nn.BatchNorm1d(1 * n_base_filters),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.PReLU(), nn.Dropout2d(),  # nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.PReLU(), nn.Dropout2d(),  # nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
+                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.PReLU(),  # nn.BatchNorm1d(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            # nn.Linear(pooling_output_size * n_output_features, 32), nn.ReLU(), nn.BatchNorm1d(32, affine=True),
-            # nn.Dropout(p=0.25),
+            nn.Linear(pooling_output_size * n_output_features, 32), nn.PReLU(),
+            # nn.Dropout(p=0.5),  # nn.BatchNorm1d(128, affine=True),
             # nn.Linear(32, 32), nn.PReLU(),
             # nn.BatchNorm1d(32, affine=True),
-            nn.Linear(pooling_output_size * n_output_features, self.output_size)
+            nn.Linear(32, self.output_size)
         )
         # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -218,19 +218,19 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
 
         room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
 
         room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
 
         room6_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
@@ -254,7 +254,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=100.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
 
         f = open("loss_log.csv", "w")
@@ -265,8 +265,9 @@ overflow the memory.
         for i in tqdm_bar:
             train_manager = DataManager(train_loader, device=self.device, buffer_size=1)
             val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
-            training_loss = 0
-            validation_loss = 0
+            training_loss = 0.0
+            validation_loss = 0.0
+            ponderar_losses = 0.0
             self.optimizer.zero_grad()
             # Voltamos ao modo treino
             self.train()
@@ -293,10 +294,14 @@ overflow the memory.
                 # We divide by the size of batch because we dont need to
                 # compensate batch size when estimating average training loss,
                 # otherwise we woul get an explosive and incorrect loss value.
-                training_loss += single_loss.detach() / X.shape[0]
+                training_loss += single_loss.detach()
+
+                ponderar_losses += X.shape[0]
 
             # Tira a media das losses.
-            training_loss = training_loss / (j + 1)
+            training_loss = training_loss / ponderar_losses
+
+            ponderar_losses = 0.0
 
             # Nao precisamos perder tempo calculando gradientes da loss durante
             # a validacao
@@ -312,14 +317,16 @@ overflow the memory.
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
-                        single_loss = self.loss_function(y_pred, y)
+                        single_loss = self.loss_function(y_pred, y) * X.shape[0]
 
                     # .item() converts to numpy and therefore detach pytorch gradient.
                     # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
                     validation_loss += single_loss.detach()
 
-            # Tira a media das losses.
-            validation_loss = validation_loss / (j + 1)
+                    ponderar_losses += X.shape[0]
+
+            # Tira a media ponderada das losses.
+            validation_loss = validation_loss / ponderar_losses
 
             # Checkpoint to best models found.
             if best_validation_loss > validation_loss:
