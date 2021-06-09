@@ -155,7 +155,7 @@ error within CUDA.
             # nn.BatchNorm1d(32, affine=True),
             nn.Linear(32, self.output_size)
         )
-        self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
+        self.lstm = nn.LSTM(input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
 
         self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
 
