@@ -242,7 +242,8 @@ overflow the memory.
         val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
         train_dataset = ConcatDataset((room1_tum_dataset, room3_tum_dataset, room4_tum_dataset, room2_tum_dataset))
-        val_dataset = room5_tum_dataset
+        train_dataset = room1_tum_dataset
+        val_dataset = room2_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
