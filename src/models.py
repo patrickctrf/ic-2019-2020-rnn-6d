@@ -1,12 +1,13 @@
 import csv
 import time
+from numpy.linalg import norm
 from threading import Thread, Event
 
 import torch
-from numpy import arange
+from numpy import arange, array
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
-from torch import nn, movedim, absolute
+from torch import nn, movedim, absolute, tensor
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
 from torch.utils.data import Subset, ConcatDataset
@@ -154,14 +155,14 @@ error within CUDA.
             # nn.BatchNorm1d(32, affine=True),
             nn.Linear(32, self.output_size)
         )
-        # self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
-        #
-        # self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
-        #
-        # # We train using multiple inputs (mini_batch), so we let this cell ready
-        # # to be called.
-        # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
-        #                     torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+        self.lstm = nn.LSTM(n_output_features, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
+
+        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
+
+        # We train using multiple inputs (mini_batch), so we let this cell ready
+        # to be called.
+        self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
+                            torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
 
         return
 
@@ -174,33 +175,33 @@ input sequence and returns the prediction for the final step.
         :return: The prediction in the end of the series.
         """
 
-        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # convolucao e precisam vir no meio para o pytorch
-        input_seq = movedim(input_seq, -2, -1)
-
-        input_seq = self.feature_extractor(input_seq)
+        # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # # convolucao e precisam vir no meio para o pytorch
+        # input_seq = movedim(input_seq, -2, -1)
+        #
+        # input_seq = self.feature_extractor(input_seq)
 
         # input_seq = movedim(input_seq, -2, -1)
         #
-        # # (seq_len, batch, input_size), mas pode inverter o
-        # # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
-        # lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
-        #
-        # # All batch size, whatever sequence length, forward direction and
-        # # lstm output size (hidden size).
-        # # We only want the last output of lstm (end of sequence), that is
-        # # the reason of '[:,-1,:]'.
-        # lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
-        #
-        # predictions = self.linear(lstm_out)
+        # (seq_len, batch, input_size), mas pode inverter o
+        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
 
-        output_seq = \
-            torch.cat((
-                self.sum_layer(input_seq),
-                # self.adaptive_pooling(input_seq),
-            ), dim=1)
+        # All batch size, whatever sequence length, forward direction and
+        # lstm output size (hidden size).
+        # We only want the last output of lstm (end of sequence), that is
+        # the reason of '[:,-1,:]'.
+        lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
 
-        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
+        predictions = self.linear(lstm_out)
+
+        # output_seq = \
+        #     torch.cat((
+        #         self.sum_layer(input_seq),
+        #         # self.adaptive_pooling(input_seq),
+        #     ), dim=1)
+        #
+        # predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
 
         return predictions
 
@@ -248,6 +249,10 @@ overflow the memory.
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
 
+        # Pesos das saídas: px py pz wq wx wy wz (translacoes e quaternios).
+        weights = array([1000, 1000, 1000, 1, 1, 1, 1])
+        weights = tensor(weights / norm(weights)).to(device=self.device)
+
         # train_loader = PackingSequenceDataloader(train_dataset, batch_size=128, shuffle=True)
         # val_loader = PackingSequenceDataloader(val_dataset, batch_size=128, shuffle=True)
         # =====fim-DATA-PREPARATION=============================================
@@ -255,7 +260,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.01, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
 
         f = open("loss_log.csv", "w")
@@ -273,11 +278,11 @@ overflow the memory.
             # Voltamos ao modo treino
             self.train()
             for j, (X, y) in enumerate(train_manager):
-                # # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # # simplesmente o tamanho do batch em y ou X (tanto faz).
-                # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                # ocorre erro no backward(). O tamanho do batch para a cell eh
+                # simplesmente o tamanho do batch em y ou X (tanto faz).
+                self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                                    torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -310,18 +315,16 @@ overflow the memory.
                 # validando o modelo no modo de evaluation
                 self.eval()
                 for j, (X, y) in enumerate(val_manager):
-                    # # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                    # # ocorre erro no backward(). O tamanho do batch para a cell eh
-                    # # simplesmente o tamanho do batch em y ou X (tanto faz).
-                    # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                    #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                    # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                    # ocorre erro no backward(). O tamanho do batch para a cell eh
+                    # simplesmente o tamanho do batch em y ou X (tanto faz).
+                    self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                                        torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
                         single_loss = self.loss_function(y_pred, y) * X.shape[0] / self.training_batch_size
 
-                    # .item() converts to numpy and therefore detach pytorch gradient.
-                    # Otherwise, it would try backpropagate whole dataset and may crash vRAM memory
                     validation_loss += single_loss.detach()
 
                     ponderar_losses += X.shape[0]
