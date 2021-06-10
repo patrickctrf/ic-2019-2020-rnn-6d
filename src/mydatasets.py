@@ -199,7 +199,8 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
 
 
 class BatchTimeseriesDataset(Dataset):
-    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1, noise=None):
+    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1, noise=None,
+                 reference_x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", reference_y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv"):
         super().__init__()
         self.batch_size = batch_size
 
@@ -211,7 +212,9 @@ class BatchTimeseriesDataset(Dataset):
                                          convert_first=True,
                                          device=torch.device("cpu"),
                                          shuffle=False,
-                                         noise=noise)
+                                         noise=noise,
+                                         reference_x_csv_path=reference_x_csv_path,
+                                         reference_y_csv_path=reference_y_csv_path)
 
         try:
             tabela = load(str(max_window_size) + str(min_window_size) +
