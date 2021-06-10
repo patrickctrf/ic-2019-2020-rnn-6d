@@ -223,8 +223,8 @@ overflow the memory.
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="datasets-novos-para-verificacao/input_validation.csv", y_csv_path="datasets-novos-para-verificacao/output_validation.csv",
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=False,
-                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv.csv",
-                                                   reference_y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv.csv")
+                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv",
+                                                   reference_y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv")
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
