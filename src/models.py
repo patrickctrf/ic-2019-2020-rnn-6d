@@ -139,14 +139,14 @@ error within CUDA.
                 # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
-                Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features)
+                Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=1 * n_base_filters, init=0.01), nn.BatchNorm1d(1 * n_base_filters),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01), nn.BatchNorm1d(4 * n_base_filters),
+                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=1 * n_base_filters, init=0.01), nn.BatchNorm1d(1 * n_base_filters),
+                Conv1d(1 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01), nn.BatchNorm1d(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
