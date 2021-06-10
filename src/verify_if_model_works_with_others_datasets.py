@@ -218,13 +218,19 @@ overflow the memory.
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="datasets-novos-para-verificacao/input_dataset.csv", y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv",
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03),
-                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv", reference_y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv")
+                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv",
+                                                   reference_y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv")
+
+        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="datasets-novos-para-verificacao/input_validation.csv", y_csv_path="datasets-novos-para-verificacao/output_validation.csv",
+                                                   min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03),
+                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv.csv",
+                                                   reference_y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv.csv")
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
 
-        train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
-        val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
+        train_dataset = room1_tum_dataset
+        val_dataset = room2_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
