@@ -216,9 +216,9 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="datasets-novos-para-verificacao/input_dataset.csv", y_csv_path="datasets-novos-para-verificacao/output_dataset.csv",
+        room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="datasets-novos-para-verificacao/input_dataset.csv", y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv",
                                                    min_window_size=100, max_window_size=350, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03),
-                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv", reference_y_csv_path="datasets-novos-para-verificacao/output_dataset.csv")
+                                                   reference_x_csv_path="datasets-novos-para-verificacao/input_dataset.csv", reference_y_csv_path="datasets-novos-para-verificacao/noisy_output_dataset.csv")
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
@@ -240,7 +240,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
 
         f = open("loss_log.csv", "w")
