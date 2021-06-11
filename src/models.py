@@ -139,25 +139,25 @@ error within CUDA.
                 # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
-                Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=1 * n_base_filters, init=0.01), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01), nn.BatchNorm1d(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01), nn.BatchNorm1d(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01), nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01), nn.BatchNorm1d(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01), nn.BatchNorm1d(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=1 * n_base_filters, init=0.01), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01), nn.BatchNorm1d(n_output_features)
+                Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters),
+                # Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01), nn.BatchNorm1d(4 * n_base_filters),
+                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 128), nn.PReLU(num_parameters=128, init=0.1),
-            nn.BatchNorm1d(128, affine=True),  # nn.Dropout(p=0.5),
-            # nn.Linear(32, 32), nn.PReLU(),
-            # nn.BatchNorm1d(32, affine=True),
-            nn.Linear(128, self.output_size)
+            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.1),
+            nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
+            # nn.Linear(16, 8), nn.PReLU(num_parameters=8, init=0.8),
+            # nn.BatchNorm1d(8, affine=True),
+            nn.Linear(16, self.output_size)
         )
         # self.lstm = nn.LSTM(input_size, self.hidden_layer_size, batch_first=True, num_layers=self.n_lstm_units, bidirectional=bool(self.bidirectional))
         #
@@ -223,16 +223,16 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=100, max_window_size=101, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
+                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=100, max_window_size=101, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
+                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
