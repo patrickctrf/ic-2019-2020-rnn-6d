@@ -144,9 +144,9 @@ error within CUDA.
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
                 Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(4 * n_base_filters),
                 # Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01), nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(n_output_features)
+                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01), nn.BatchNorm1d(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
@@ -223,16 +223,16 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=60, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=60, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=60, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=80, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=60, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
