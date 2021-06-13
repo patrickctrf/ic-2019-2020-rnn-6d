@@ -10,6 +10,7 @@ from sklearn.metrics import make_scorer
 from torch import nn, movedim, absolute, tensor
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
+from torch.optim import lr_scheduler
 from torch.utils.data import Subset, ConcatDataset
 from tqdm import tqdm
 
@@ -264,8 +265,9 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
+        scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -308,7 +310,7 @@ overflow the memory.
 
                 ponderar_losses += X.shape[0]
 
-            # Tira a media das losses.
+            # Tira a media ponderada das losses.
             training_loss = training_loss * self.training_batch_size / ponderar_losses
 
             ponderar_losses = 0.0
@@ -335,6 +337,9 @@ overflow the memory.
 
             # Tira a media ponderada das losses.
             validation_loss = validation_loss * self.training_batch_size / ponderar_losses
+
+            # Run learning rate scheduler
+            scheduler.step(validation_loss)
 
             # Checkpoint to best models found.
             if best_validation_loss > validation_loss:
