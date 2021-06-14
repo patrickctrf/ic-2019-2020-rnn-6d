@@ -184,33 +184,33 @@ input sequence and returns the prediction for the final step.
         :return: The prediction in the end of the series.
         """
 
-        # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # # convolucao e precisam vir no meio para o pytorch
-        # input_seq = movedim(input_seq, -2, -1)
+        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # convolucao e precisam vir no meio para o pytorch
+        input_seq = movedim(input_seq, -2, -1)
+
+        input_seq = self.feature_extractor(input_seq)
+
+        # # input_seq = movedim(input_seq, -2, -1)
+        # #
+        # # (seq_len, batch, input_size), mas pode inverter o
+        # # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        # lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
         #
-        # input_seq = self.feature_extractor(input_seq)
-
-        # input_seq = movedim(input_seq, -2, -1)
+        # # All batch size, whatever sequence length, forward direction and
+        # # lstm output size (hidden size).
+        # # We only want the last output of lstm (end of sequence), that is
+        # # the reason of '[:,-1,:]'.
+        # lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
         #
-        # (seq_len, batch, input_size), mas pode inverter o
-        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
-        lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
+        # predictions = self.linear(lstm_out)
 
-        # All batch size, whatever sequence length, forward direction and
-        # lstm output size (hidden size).
-        # We only want the last output of lstm (end of sequence), that is
-        # the reason of '[:,-1,:]'.
-        lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        output_seq = \
+            torch.cat((
+                self.sum_layer(input_seq),
+                self.adaptive_pooling(input_seq),
+            ), dim=1)
 
-        predictions = self.linear(lstm_out)
-
-        # output_seq = \
-        #     torch.cat((
-        #         self.sum_layer(input_seq),
-        #         self.adaptive_pooling(input_seq),
-        #     ), dim=1)
-        #
-        # predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
+        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
 
         return predictions
 
@@ -228,16 +228,16 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=40, max_window_size=120, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=40, max_window_size=120, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=40, max_window_size=120, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
 
         room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=40, max_window_size=120, batch_size=self.training_batch_size, shuffle=False)
 
         room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
@@ -268,7 +268,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer)
 
@@ -278,7 +278,7 @@ overflow the memory.
 
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
-            train_manager = DataManager(train_loader, device=self.device, buffer_size=1)
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=2)
             val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
             training_loss = 0.0
             validation_loss = 0.0
@@ -287,11 +287,11 @@ overflow the memory.
             # Voltamos ao modo treino
             self.train()
             for j, (X, y) in enumerate(train_manager):
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                                    torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -324,11 +324,11 @@ overflow the memory.
                 # validando o modelo no modo de evaluation
                 self.eval()
                 for j, (X, y) in enumerate(val_manager):
-                    # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                    # ocorre erro no backward(). O tamanho do batch para a cell eh
-                    # simplesmente o tamanho do batch em y ou X (tanto faz).
-                    self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                                        torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                    # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                    # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                    # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                    # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                    #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
