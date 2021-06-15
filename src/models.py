@@ -1,17 +1,17 @@
 import csv
 import time
-from numpy.linalg import norm
 from threading import Thread, Event
 
 import torch
 from numpy import arange, array
+from numpy.linalg import norm
 from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from torch import nn, movedim, absolute, tensor
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d
 from torch.optim import lr_scheduler
-from torch.utils.data import Subset, ConcatDataset
+from torch.utils.data import Subset
 from tqdm import tqdm
 
 from mydatasets import *
@@ -70,6 +70,34 @@ class SumLayer(nn.Module):
 
     def forward(self, input_seq):
         return torch.sum(input_seq, dim=-1, keepdim=True)
+
+
+class SqueezeAndExcitationBlock1D(nn.Module):
+    def __init__(self, n_channels):
+        """
+    Classical implementation of Squeeze and Excitation Networks
+    from https://arxiv.org/pdf/1709.01507.pdf .
+    This block provides attention mechanism for Conv1D layers output.
+
+        :param n_channels: Number of channels to receive from Conv1D.
+        """
+        super().__init__()
+
+        self.n_channels = n_channels
+
+        self.squeeze_and_excitation = nn.Sequential(
+            nn.AdaptiveAvgPool1d(1),
+            nn.Flatten(),
+            nn.Linear(n_channels, n_channels),
+            nn.LeakyReLU(),
+            nn.Linear(n_channels, n_channels),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, input_seq):
+        # We flattened the input, so we resize it back to shape after global
+        # pooling and multiply the original input sequence.
+        return input_seq * self.squeeze_and_excitation(input_seq).view(-1, self.n_channels, 1)
 
 
 class InertialModule(nn.Module):
@@ -149,8 +177,11 @@ error within CUDA.
                 nn.Dropout2d(p=0.5),
                 Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
                 # Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
+                SqueezeAndExcitationBlock1D(3 * n_base_filters),
                 Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
+                SqueezeAndExcitationBlock1D(2 * n_base_filters),
                 Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
+                SqueezeAndExcitationBlock1D(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
