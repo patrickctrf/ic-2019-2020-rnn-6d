@@ -37,11 +37,13 @@ class ResBlock(nn.Module):
                 Conv1d(n_input_channels, n_output_channels, kernel_size,
                        stride, kernel_size[0] // 2 * dilation, dilation,
                        groups, bias, padding_mode),
-                nn.PReLU(), nn.BatchNorm1d(n_output_channels),
+                nn.LeakyReLU(),
+                nn.BatchNorm1d(n_output_channels),
                 Conv1d(n_output_channels, n_output_channels, kernel_size,
                        stride, kernel_size[0] // 2 * dilation + padding,
                        dilation, groups, bias, padding_mode),
-                nn.PReLU(), nn.BatchNorm1d(n_output_channels)
+                nn.PReLU(num_parameters=n_output_channels, init=0.01),
+                nn.BatchNorm1d(n_output_channels)
             )
 
         self.skip_connection = \
