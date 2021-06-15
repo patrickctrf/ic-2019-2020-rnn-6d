@@ -22,7 +22,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=16, n_lstm_units=10, bidirectional=True,
-                           output_size=7, training_batch_size=1024, epochs=200, device=device, validation_percent=0.2)
+                           output_size=7, training_batch_size=1024, epochs=50, device=device, validation_percent=0.2)
 
     # Carrega o extrator de features convolucional pretreinado e congela (grad)
     # model.load_feature_extractor()
