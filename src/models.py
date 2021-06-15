@@ -100,6 +100,192 @@ class SqueezeAndExcitationBlock1D(nn.Module):
         return input_seq * self.squeeze_and_excitation(input_seq).view(-1, self.n_channels, 1)
 
 
+class LSTMLatentFeatures(nn.Module):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, bidirectional=False):
+        """
+This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
+receives sequences and returns the predcition at the end of each one.
+
+There is a fit() method to train this model according to the parameters given in
+the class initialization. It follows the sklearn header pattern.
+
+This is also an sklearn-like estimator and may be used with any sklearn method
+designed for classical estimators. But, when using GPU as PyTorch device, you
+CAN'T use multiple sklearn workers (n_jobs), beacuse it raises an serializtion
+error within CUDA.
+
+        :param input_size: Input dimension size (how many features).
+        :param hidden_layer_size: How many features there will be inside each LSTM.
+        :param output_size: Output dimension size (how many features).
+        :param n_lstm_units: How many stacked LSTM cells (or units).
+        :param epochs: The number of epochs to train. The final model after
+        train will be the one with best VALIDATION loss, not necessarily the
+        model found after whole "epochs" number.
+        :param training_batch_size: Size of each mini-batch during training
+        process. If number os samples is not a multiple of
+        "training_batch_size", the final batch will just be smaller than the
+        others.
+        :param validation_percent: The percentage of samples reserved for
+        validation (cross validation) during training inside fit() method.
+        :param bidirectional: If the LSTM units will be bidirectional.
+        :param device: PyTorch device, such as torch.device("cpu") or
+        torch.device("cuda:0").
+        """
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_layer_size = hidden_layer_size
+        self.output_size = output_size
+        self.n_lstm_units = n_lstm_units
+        if bidirectional:
+            self.bidirectional = 1
+            self.num_directions = 2
+        else:
+            self.bidirectional = 0
+            self.num_directions = 1
+
+        self.lstm = nn.LSTM(input_size, self.hidden_layer_size,
+                            batch_first=True, num_layers=self.n_lstm_units,
+                            bidirectional=bool(self.bidirectional),
+                            dropout=0.5)
+
+        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
+
+        # We train using multiple inputs (mini_batch), so we let this cell ready
+        # to be called.
+        self.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
+                                  torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+
+        self.hidden_cell_output = None
+
+        return
+
+    def forward(self, input_seq):
+        """
+Classic forward method of every PyTorch model, as fast as possible. Receives an
+input sequence and returns the prediction for the final step.
+
+        :param input_seq: Input sequence of the time series.
+        :return: The prediction in the end of the series.
+        """
+
+        # (seq_len, batch, input_size), mas pode inverter o
+        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        lstm_out, self.hidden_cell_output = self.lstm(input_seq, self.hidden_cell_zeros)
+
+        # All batch size, whatever sequence length, forward direction and
+        # lstm output size (hidden size).
+        return lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)
+
+
+class Conv1DFeatureExtractor(nn.Module):
+    def __init__(self, input_size=1, output_size=1):
+        """
+This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
+receives sequences and returns the predcition at the end of each one.
+
+There is a fit() method to train this model according to the parameters given in
+the class initialization. It follows the sklearn header pattern.
+
+This is also an sklearn-like estimator and may be used with any sklearn method
+designed for classical estimators. But, when using GPU as PyTorch device, you
+CAN'T use multiple sklearn workers (n_jobs), beacuse it raises an serializtion
+error within CUDA.
+
+        :param input_size: Input dimension size (how many features).
+        :param hidden_layer_size: How many features there will be inside each LSTM.
+        :param output_size: Output dimension size (how many features).
+        :param n_lstm_units: How many stacked LSTM cells (or units).
+        :param epochs: The number of epochs to train. The final model after
+        train will be the one with best VALIDATION loss, not necessarily the
+        model found after whole "epochs" number.
+        :param training_batch_size: Size of each mini-batch during training
+        process. If number os samples is not a multiple of
+        "training_batch_size", the final batch will just be smaller than the
+        others.
+        :param validation_percent: The percentage of samples reserved for
+        validation (cross validation) during training inside fit() method.
+        :param bidirectional: If the LSTM units will be bidirectional.
+        :param device: PyTorch device, such as torch.device("cpu") or
+        torch.device("cuda:0").
+        """
+        super().__init__()
+        self.input_size = input_size
+        self.output_size = output_size
+
+        # ATTENTION: You cannot change this anymore, since we added a sum layer
+        # and it casts conv outputs to 1 feature per channel
+        pooling_output_size = 1
+
+        n_base_filters = 8
+        n_output_features = 8
+        self.feature_extractor = \
+            Sequential(
+                #
+                # Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=True),
+                # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
+                # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
+                # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
+                Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
+                nn.Dropout2d(p=0.5),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(3 * n_base_filters),
+                nn.Dropout2d(p=0.5),
+                Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
+                # Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
+                SqueezeAndExcitationBlock1D(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
+                SqueezeAndExcitationBlock1D(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
+                SqueezeAndExcitationBlock1D(n_output_features)
+            )
+
+        self.sum_layer = SumLayer(n_output_features)
+        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
+
+        self.dense_network = Sequential(
+            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.1),
+            # nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
+            # nn.Linear(16, 8), nn.PReLU(num_parameters=8, init=0.8),
+            # nn.BatchNorm1d(8, affine=True),
+            nn.Linear(16, self.output_size)
+        )
+        return
+
+    def forward(self, input_seq):
+        """
+Classic forward method of every PyTorch model, as fast as possible. Receives an
+input sequence and returns the prediction for the final step.
+
+        :param input_seq: Input sequence of the time series.
+        :return: The prediction in the end of the series.
+        """
+
+        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # convolucao e precisam vir no meio para o pytorch
+        input_seq = movedim(input_seq, -2, -1)
+
+        input_seq = self.feature_extractor(input_seq)
+
+        # # input_seq = movedim(input_seq, -2, -1)
+        # #
+        # # (seq_len, batch, input_size), mas pode inverter o
+        # # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        # lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
+        #
+        # # All batch size, whatever sequence length, forward direction and
+        # # lstm output size (hidden size).
+        # # We only want the last output of lstm (end of sequence), that is
+        # # the reason of '[:,-1,:]'.
+        # lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        #
+        # predictions = self.linear(lstm_out)
+
+        return torch.cat((
+            self.sum_layer(input_seq),
+            self.adaptive_pooling(input_seq),
+        ), dim=1)
+
+
 class InertialModule(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, epochs=150, training_batch_size=64, validation_percent=0.2, bidirectional=False, device=torch.device("cpu"),
                  use_amp=True):
