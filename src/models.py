@@ -348,7 +348,7 @@ error within CUDA.
         pooling_output_size = 1
 
         n_base_filters = 16
-        n_output_features = 8
+        n_output_features = 64
         self.feature_extractor = \
             Sequential(
                 #
@@ -363,11 +363,11 @@ error within CUDA.
                 nn.Dropout2d(p=0.5),
                 Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
                 SqueezeAndExcitationBlock1D(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
-                SqueezeAndExcitationBlock1D(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
-                SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
+                SqueezeAndExcitationBlock1D(4 * n_base_filters),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
+                SqueezeAndExcitationBlock1D(4 * n_base_filters),
+                Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
                 SqueezeAndExcitationBlock1D(n_output_features)
             )
 
