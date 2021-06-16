@@ -148,12 +148,16 @@ error within CUDA.
                             bidirectional=bool(self.bidirectional),
                             dropout=0.5)
 
-        self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
-
+        self.dense_network = Sequential(
+            nn.Linear(self.num_directions * self.hidden_layer_size, 16),
+            nn.PReLU(num_parameters=16, init=0.1),
+            nn.Linear(16, self.output_size)
+        )
         # We train using multiple inputs (mini_batch), so we let this cell ready
         # to be called.
-        self.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
-                                  torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+        # self.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
+        #                           torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+        self.hidden_cell_zeros = None
 
         self.hidden_cell_output = None
 
@@ -178,7 +182,7 @@ input sequence and returns the prediction for the final step.
 
 
 class Conv1DFeatureExtractor(nn.Module):
-    def __init__(self, input_size=1, output_size=1):
+    def __init__(self, input_size=1, output_size=8):
         """
 This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
 receives sequences and returns the predcition at the end of each one.
@@ -210,6 +214,8 @@ error within CUDA.
         """
         super().__init__()
         self.input_size = input_size
+
+        # Half of the outputs are summed and the other half is Avg pooling.
         self.output_size = output_size
 
         # ATTENTION: You cannot change this anymore, since we added a sum layer
@@ -217,7 +223,7 @@ error within CUDA.
         pooling_output_size = 1
 
         n_base_filters = 8
-        n_output_features = 8
+        n_output_features = self.output_size
         self.feature_extractor = \
             Sequential(
                 #
@@ -347,51 +353,16 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 16
-        n_output_features = 64
+        n_base_filters = 8
+        n_output_features = 8
         self.feature_extractor = \
-            Sequential(
-                #
-                # Conv1d(input_size, 1 * n_base_filters, (7,), dilation=(1,), stride=(1,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters, affine=True),
-                # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
-                # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
-                # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
-                Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
-                Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
-                nn.Dropout2d(p=0.5),
-                Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(3 * n_base_filters),
-                nn.Dropout2d(p=0.5),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
-                SqueezeAndExcitationBlock1D(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
-                SqueezeAndExcitationBlock1D(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
-                SqueezeAndExcitationBlock1D(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
-                SqueezeAndExcitationBlock1D(n_output_features)
-            )
+            LSTMLatentFeatures(input_size=input_size,
+                               hidden_layer_size=hidden_layer_size,
+                               output_size=output_size,
+                               n_lstm_units=n_lstm_units,
+                               bidirectional=bidirectional)
 
-        self.sum_layer = SumLayer(n_output_features)
-        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
-
-        self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.1),
-            # nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
-            # nn.Linear(16, 8), nn.PReLU(num_parameters=8, init=0.8),
-            # nn.BatchNorm1d(8, affine=True),
-            nn.Linear(16, self.output_size)
-        )
-        # self.lstm = nn.LSTM(input_size, self.hidden_layer_size,
-        #                     batch_first=True, num_layers=self.n_lstm_units,
-        #                     bidirectional=bool(self.bidirectional),
-        #                     dropout=0.5)
-        #
-        # self.linear = nn.Linear(self.num_directions * self.hidden_layer_size, self.output_size)
-        #
-        # # We train using multiple inputs (mini_batch), so we let this cell ready
-        # # to be called.
-        # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
-        #                     torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+        self.dense_network = self.feature_extractor.dense_network
 
         return
 
@@ -406,31 +377,21 @@ input sequence and returns the prediction for the final step.
 
         # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
         # convolucao e precisam vir no meio para o pytorch
-        input_seq = movedim(input_seq, -2, -1)
-
-        input_seq = self.feature_extractor(input_seq)
-
-        # # input_seq = movedim(input_seq, -2, -1)
-        # #
-        # # (seq_len, batch, input_size), mas pode inverter o
-        # # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
-        # lstm_out, self.hidden_cell = self.lstm(input_seq, self.hidden_cell)
+        # input_seq = movedim(input_seq, -2, -1)
         #
-        # # All batch size, whatever sequence length, forward direction and
-        # # lstm output size (hidden size).
-        # # We only want the last output of lstm (end of sequence), that is
-        # # the reason of '[:,-1,:]'.
-        # lstm_out = lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        # output_seq = self.feature_extractor(input_seq)
         #
-        # predictions = self.linear(lstm_out)
+        # predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
 
-        output_seq = \
-            torch.cat((
-                self.sum_layer(input_seq),
-                self.adaptive_pooling(input_seq),
-            ), dim=1)
+        output_seq = self.feature_extractor(input_seq)
 
-        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
+        # All batch size, whatever sequence length, forward direction and
+        # lstm output size (hidden size).
+        # We only want the last output of lstm (end of sequence), that is
+        # the reason of '[:,-1,:]'.
+        output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+
+        predictions = self.dense_network(output_seq)
 
         return predictions
 
@@ -507,11 +468,11 @@ overflow the memory.
             # Voltamos ao modo treino
             self.train()
             for j, (X, y) in enumerate(train_manager):
-                # # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # # simplesmente o tamanho do batch em y ou X (tanto faz).
-                # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                # ocorre erro no backward(). O tamanho do batch para a cell eh
+                # simplesmente o tamanho do batch em y ou X (tanto faz).
+                self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                                                            torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -544,11 +505,11 @@ overflow the memory.
                 # validando o modelo no modo de evaluation
                 self.eval()
                 for j, (X, y) in enumerate(val_manager):
-                    # # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                    # # ocorre erro no backward(). O tamanho do batch para a cell eh
-                    # # simplesmente o tamanho do batch em y ou X (tanto faz).
-                    # self.hidden_cell = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                    #                     torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                    # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                    # ocorre erro no backward(). O tamanho do batch para a cell eh
+                    # simplesmente o tamanho do batch em y ou X (tanto faz).
+                    self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                                                                torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
@@ -561,8 +522,8 @@ overflow the memory.
             # Tira a media ponderada das losses.
             validation_loss = validation_loss / ponderar_losses
 
-            # # Run learning rate scheduler
-            # scheduler.step(validation_loss)
+            # Run learning rate scheduler
+            scheduler.step(validation_loss)
 
             # Checkpoint to best models found.
             if best_validation_loss > validation_loss:
