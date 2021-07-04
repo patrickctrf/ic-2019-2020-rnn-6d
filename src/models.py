@@ -966,3 +966,334 @@ index in the original array.
         """
         idx = (absolute(tensor_to_search - value)).argmin()
         return tensor_to_search[idx], idx
+
+
+class IMUHandlerWithPreintegration(nn.Module, Thread):
+
+    def __init__(self, sampling_window_size=200, imu_input_size=6,
+                 position_output_size=7, device=torch.device("cpu"),
+                 data_type=torch.float32, imu_frequency=120):
+        """
+This module receives IMU samples and uses the InertialModule to predict our
+current position at real time.
+
+Our estimated position takes into account the estimated position
+at sampling_window_size IMU samples before, summed with the displacement
+predicted by InertialModule after all those IMU samples. It is an arithmetic
+summation of each displacement and doesnt takes into account any estimated
+trajectory for the object being tracked.
+
+ATENTION: You need to call load_feature_extractor() after instantiating this
+class, or your InertialModule predictor will just be a random output. You also
+need to call this object.start() to begin updating positions in another thread.
+
+        :param sampling_window_size: (Integer) How many IMU samples to calculate the displacement. Default = 200.
+        :param imu_input_size: (Integer) How many features IMU give to us. Default = 6 (ax, ay, az, wx, wq, wz).
+        :param position_output_size: (Integer) How many features we use to represent our position annotation. Default = 7 (px, py, pz, qw, qx, qy, qz).
+        """
+        nn.Module.__init__(self)
+        Thread.__init__(self)
+        self.sampling_window_size = sampling_window_size
+        self._imu_input_size = imu_input_size
+        self._position_output_size = position_output_size
+        self.device = device
+        self.data_type = data_type
+
+        # Event synchronizer for position updates. We'll only estimate a new
+        # position if new IMU samples have arrived.
+        self._imu_samples_arrived = Event()
+
+        # sample period
+        self.delta_t = 1 / imu_frequency
+
+        # Indicate for clients that our position predictions have been updated.
+        self.new_predictions_arrived = Event()
+
+        # A control flag ordering this thread to stop.
+        self.stop_flag = False
+
+        # Here we are gonna store previous IMU samples and our estimated
+        # positions at that time. Also, we need a timestamp info to synchronize
+        # them. These buffers will grow as new samples and predictions arrive.
+        self.predictions_buffer = torch.zeros((1, 1 + position_output_size,),
+                                              dtype=self.data_type,
+                                              device=self.device,
+                                              requires_grad=False)
+        # First dimension will always be 1, because of batch dimension.
+        self.imu_buffer = torch.zeros((1, 1, 1 + imu_input_size,),
+                                      dtype=self.data_type,
+                                      device=self.device,
+                                      requires_grad=False)
+
+        # This avoids recalculating these thresholds.
+        self._imu_buffer_size_limit = 2 * sampling_window_size
+        self._imu_buffer_reduction_threshold = int(1.5 * sampling_window_size)
+
+        # ========DEFAULT-PREDICTOR-FOR-COMPATIBILITY===========================
+        # Here we define a default InertialModule component, but your are
+        # strongly encouraged to load_feature_extractor(), since the modules
+        # defined here are not trained yet.
+        pooling_output_size = 100
+        n_base_filters = 72
+        n_output_features = 200
+        self.feature_extractor = \
+            Sequential(
+                Conv1d(imu_input_size, 1 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(1 * n_base_filters),
+                Conv1d(1 * n_base_filters, 2 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(2 * n_base_filters, 3 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (7,)), nn.PReLU(), nn.BatchNorm1d(4 * n_base_filters),
+                Conv1d(4 * n_base_filters, n_output_features, (7,)), nn.PReLU(), nn.BatchNorm1d(n_output_features)
+            )
+        self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
+        self.dense_network = Sequential(
+            nn.Linear(pooling_output_size * n_output_features, 72), nn.PReLU(), nn.BatchNorm1d(72), nn.Dropout(p=0.5),
+            nn.Linear(72, 32), nn.PReLU(),
+            nn.Linear(32, position_output_size)
+        )
+        # ========end-of-DEFAULT-PREDICTOR-FOR-COMPATIBILITY====================
+
+        return
+
+    def forward(self, input_seq):
+        """
+Classic forward method of every PyTorch model. However,
+you are not expected to call this method in this model. We have a thread that
+updates our position and returns it to with get_current_position().
+
+        :param input_seq: Input sequence of the time series.
+        :return: The prediction in the end of the series.
+        """
+
+        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # convolucao e precisam vir no meio para o pytorch
+        input_seq = movedim(input_seq, -2, -1)
+
+        input_seq = self.feature_extractor(input_seq)
+        input_seq = self.adaptive_pooling(input_seq)
+
+        predictions = self.dense_network(input_seq.view(input_seq.shape[0], -1))
+
+        return predictions
+
+    def load_feature_extractor(self, freeze_pretrained_model=True):
+        """
+Here you may load a pretrained InertialModule to make predictions. By default,
+it freezes all InertialModule layers.
+
+        :param freeze_pretrained_model: Whenever to freeze pretrained InertialModule layers. Default = True.
+        :return: Void.
+        """
+        model = torch.load("best_model.pth")
+        # model.load_state_dict(torch.load("best_model_state_dict.pth"))
+
+        self.feature_extractor = model.feature_extractor
+        # Aproveitamos para carregar tambem a camada densa de previsao de uma vez
+        self.dense_network = model.dense_network
+
+        if freeze_pretrained_model is True:
+            # Congela todas as camadas do extrator para treinar apenas as camadas
+            # seguintes
+            for param in self.feature_extractor.parameters():
+                param.requires_grad = False
+
+            # Estamos congelndo tambem a camada de previsao, apenas para aproveitar a chamada da funcao
+            for param in self.dense_network.parameters():
+                param.requires_grad = False
+
+        return
+
+    def get_current_position(self, ):
+        """
+Returns latest position update generated by this model. We also receive a
+timestamp indicating the time that position was estimated.
+
+        :return: Tuple with (Tensor (1x7) containing latest position update; Respective position time reference).
+        """
+        if self.predictions_buffer.shape[0] > 3 * self.sampling_window_size:
+            self.predictions_buffer = \
+                self.predictions_buffer[-2 * self.sampling_window_size:]
+
+        self.new_predictions_arrived.clear()
+        # Return the last position update and drop out the associated timestamp.
+        return self.predictions_buffer[-1, 1:], self.predictions_buffer[-1, 0]
+
+    def set_initial_position(self, position, timestamp=time.time()):
+        """
+    This Handler calculates position according to displacement from initial
+    position. It gives you absolute position estimatives if the initial
+    position is set according to your global reference.
+
+        :param position: Starting position (px, py, pz, qw, qx, qy, qz).
+        """
+
+        position = torch.tensor(position, device=self.device,
+                                dtype=self.data_type, requires_grad=False)
+
+        timestamp = torch.tensor(timestamp, device=self.device,
+                                 dtype=self.data_type, requires_grad=False)
+
+        self.predictions_buffer[0, 1:] = position
+        self.predictions_buffer[0, 0:1] = timestamp
+
+        return
+
+    def push_imu_sample_to_buffer(self, sample, timestamp):
+        """
+Stores a new IMU sample to the buffer, so it will be taken into account in next
+predictions.
+
+        :param sample: List or iterable containig 6 channels of IMU sample (ax, ay, az, wx, wq, wz).
+        :return: Void.
+        """
+
+        if self.imu_buffer.shape[1] > self._imu_buffer_size_limit:
+            self.imu_buffer = \
+                self.imu_buffer[0:, -self._imu_buffer_reduction_threshold:, :]
+
+        self.imu_buffer = \
+            torch.cat((self.imu_buffer,
+                       torch.tensor([timestamp] + list(sample),
+                                    dtype=self.data_type, requires_grad=False,
+                                    device=self.device).view(1, 1, -1)
+                       ), dim=1)
+
+        # Informs this thread that new samples have been generated.
+        self._imu_samples_arrived.set()
+
+        return
+
+    # This class is not intended to be used as training for the InertialModule
+    # first stage, so we disable grad for faster computation.
+    @torch.no_grad()
+    def run(self):
+
+        # We only can start predicting positions after we have the
+        # sampling_window_size IMU samples collected.
+        while self.imu_buffer.shape[1] < self.sampling_window_size:
+            time.sleep(1)
+
+        # Put pytorch module into evaluation mode (batchnorm and dropout need).
+        self.eval()
+
+        # If this thread is not stopped, continue updating position.
+        while self.stop_flag is False:
+            # Wait for IMU new readings
+            self._imu_samples_arrived.wait()
+
+            # We check the timestamp of the last sampling_window_size reading and
+            # search for the closest timestamp in prediction buffer.
+            prediction_closest_timestamp, prediction_idx = \
+                IMUHandler.find_nearest(
+                    self.predictions_buffer[:, 0],
+                    self.imu_buffer[0, -self.sampling_window_size, 0]
+                )
+
+            # We also need the prediction's closest reading, that may not be
+            # the one at sampling_window_size before
+            imu_closest_timestamp, imu_idx = \
+                IMUHandler.find_nearest(
+                    self.imu_buffer[0, :, 0],
+                    prediction_closest_timestamp
+                )
+
+            # We need to now for what time we are calculating position.
+            current_timestamp = self.imu_buffer[0:, -1, 0:1]
+
+            # Registers that there are no more NEW imu readings to process.
+            self._imu_samples_arrived.clear()
+
+            self.predictions_buffer = \
+                torch.cat((
+                    self.predictions_buffer,
+                    torch.cat((
+                        current_timestamp,
+                        self.predictions_buffer[prediction_idx, 1:] +
+                        self(self.imu_buffer[0:, imu_idx:, 1:])
+                    ), dim=1)
+                ))
+
+            self.new_predictions_arrived.set()
+
+    @staticmethod
+    def find_nearest(tensor_to_search, value):
+        """
+This method takes 1 tensor as first argument and a value to find the element
+in array whose value is the closest. Returns the closest value element and its
+index in the original array.
+
+        :param tensor_to_search: Reference tensor.
+        :param value: Value to find closest element.
+        :return: Tuple (Element value, element index).
+        """
+        idx = (absolute(tensor_to_search - value)).argmin()
+        return tensor_to_search[idx], idx
+
+    def delta_r_v_p(self, w_samples, a_samples, initial_velocity=0):
+        """
+    This method computes delta R, v and p (orientation, velocity and position),
+    according to https://arxiv.org/abs/2101.07061 and
+    https://arxiv.org/abs/1512.02363 about inertial feature preintegration.
+
+        :param w_samples: IMU gyroscope input samples to compute over.
+        :param a_samples: IMU accelerometer input samples to compute over.
+        :param initial_velocity: Whenever using a statefull approach, passing
+        initial_velocity will bring up better preintegration results.
+        :return: R (converted from matriz into quaternion), v and p (both 3D tensors).
+        """
+        # orientation matrix
+        delta_r = torch.eye(n=3, m=3)
+        # velocity tensor (3 element)
+        delta_v = 0.0
+        # position tensor (3 element)
+        delta_p = 0.0
+
+        # interactive productory and summation steps
+        for w_k, a_k in zip(w_samples, a_samples):
+            delta_r = torch.matmul(delta_r, w_k)
+            delta_v += torch.matmul(delta_r, a_k)
+            # Slightly different from original paper, now including
+            # initial_velocity to compute CURRENT velcity, not
+            # only delta_v (variation)
+            delta_p += (initial_velocity + delta_v) * self.delta_t + delta_r * a_k * self.delta_t
+
+        # Converts R orientation matrix into equivalent skew matrix. SO(3) -> so(3)
+        # phi is a simple rotation angle (the value in radians of the angle of rotation)
+        phi = torch.acos((torch.trace(delta_r) - 1) / 2)
+
+        # Skew "orientation" matrix into axis-angles tensor (3-element).
+        # we do not multiply by phi, so we have a normalized rotation AXIS (in a SKEW matrix yet)
+        # normalized because we didnt multiply the axis by the rotation angle (phi)
+        normalized_axis_r = self.tensor_from_skew_matrix((delta_r - delta_r.T) / (2 * torch.sin(phi)))
+
+        # From axis-angle notation into quaternion notation.
+        # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+        quaternion_orientation_r = torch.zeros((4,))
+        quaternion_orientation_r[0] = torch.cos(phi / 2)
+        quaternion_orientation_r[1] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[0])
+        quaternion_orientation_r[2] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[1])
+        quaternion_orientation_r[3] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[2])
+
+        return quaternion_orientation_r, delta_v, delta_p, normalized_axis_r
+
+    def skew_matrix_from_tensor(self, x):
+        """
+    Receives a 3-element tensor and return its respective skew matrix.
+
+        :param x: 3-element tensor.
+        :return: Respective skew-matrix (3x3)
+        """
+        return torch.tensor([
+            [0, -x[2], x[1]],
+            [x[2], 0, -x[0]],
+            [-x[1], x[0], 0],
+        ], dtype=self.data_type, device=self.device)
+
+    def tensor_from_skew_matrix(self, x):
+        """
+    Receives a skew matrix and returns its associated 3-element vector (tensor).
+
+        :param x: Skew matrix (3x3)
+        :return: Associated tensor (3-element).
+        """
+        return torch.tensor([x[2][1], x[0][2], x[1][0]],
+                            dtype=self.data_type, device=self.device)

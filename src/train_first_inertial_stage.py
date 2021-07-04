@@ -21,7 +21,7 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = InertialModule(input_size=6, hidden_layer_size=16, n_lstm_units=10, bidirectional=True,
+    model = InertialModule(input_size=6, hidden_layer_size=128, n_lstm_units=1, bidirectional=True,
                            output_size=7, training_batch_size=1024, epochs=150, device=device, validation_percent=0.2)
 
     # Carrega o extrator de features convolucional pretreinado e congela (grad)
