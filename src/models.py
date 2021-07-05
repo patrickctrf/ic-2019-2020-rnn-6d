@@ -19,7 +19,7 @@ from ptk.utils import *
 
 # When importing every models from this module, make sure only models are
 # imported
-__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer"]
+__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer", "IMUHandlerWithPreintegration"]
 
 
 class ResBlock(nn.Module):
@@ -972,7 +972,7 @@ class IMUHandlerWithPreintegration(nn.Module, Thread):
 
     def __init__(self, sampling_window_size=200, imu_input_size=6,
                  position_output_size=7, device=torch.device("cpu"),
-                 data_type=torch.float32, imu_frequency=120):
+                 data_type=torch.float32, imu_frequency=200):
         """
 This module receives IMU samples and uses the InertialModule to predict our
 current position at real time.
@@ -1004,7 +1004,13 @@ need to call this object.start() to begin updating positions in another thread.
         self._imu_samples_arrived = Event()
 
         # sample period
-        self.delta_t = 1 / imu_frequency
+        self.delta_t = 1.0 / imu_frequency
+
+        # Auxiliary variable
+        self.identity_matrix = torch.eye(n=3, m=3,
+                                         dtype=self.data_type,
+                                         device=self.device,
+                                         requires_grad=False)
 
         # Indicate for clients that our position predictions have been updated.
         self.new_predictions_arrived = Event()
@@ -1019,11 +1025,17 @@ need to call this object.start() to begin updating positions in another thread.
                                               dtype=self.data_type,
                                               device=self.device,
                                               requires_grad=False)
-        # First dimension will always be 1, because of batch dimension.
-        self.imu_buffer = torch.zeros((1, 1, 1 + imu_input_size,),
-                                      dtype=self.data_type,
-                                      device=self.device,
-                                      requires_grad=False)
+        # acceleration and angular velocity buffers
+        self.a_imu_buffer = torch.zeros((1, 1 + 3,),
+                                        dtype=self.data_type,
+                                        device=self.device,
+                                        requires_grad=False)
+        # We save angular velocity already converted into matrices, timestamp
+        # sinchronization is done within acceleration buffer.
+        self.w_imu_buffer = torch.zeros((1, 3, 3),
+                                        dtype=self.data_type,
+                                        device=self.device,
+                                        requires_grad=False)
 
         # This avoids recalculating these thresholds.
         self._imu_buffer_size_limit = 2 * sampling_window_size
@@ -1054,26 +1066,19 @@ need to call this object.start() to begin updating positions in another thread.
 
         return
 
-    def forward(self, input_seq):
+    def forward(self, a, w, v=0):
         """
 Classic forward method of every PyTorch model. However,
 you are not expected to call this method in this model. We have a thread that
 updates our position and returns it to with get_current_position().
 
-        :param input_seq: Input sequence of the time series.
+        :param a: Acceleration samples.
+        :param w: Angular velocity samples.
+        :param v: Initial velocity, if available.
         :return: The prediction in the end of the series.
         """
 
-        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # convolucao e precisam vir no meio para o pytorch
-        input_seq = movedim(input_seq, -2, -1)
-
-        input_seq = self.feature_extractor(input_seq)
-        input_seq = self.adaptive_pooling(input_seq)
-
-        predictions = self.dense_network(input_seq.view(input_seq.shape[0], -1))
-
-        return predictions
+        return self.delta_r_v_p(a, w)
 
     def load_feature_extractor(self, freeze_pretrained_model=True):
         """
@@ -1137,7 +1142,7 @@ timestamp indicating the time that position was estimated.
 
         return
 
-    def push_imu_sample_to_buffer(self, sample, timestamp):
+    def push_imu_sample_to_buffer(self, a_sample, w_sample, timestamp):
         """
 Stores a new IMU sample to the buffer, so it will be taken into account in next
 predictions.
@@ -1146,16 +1151,27 @@ predictions.
         :return: Void.
         """
 
-        if self.imu_buffer.shape[1] > self._imu_buffer_size_limit:
-            self.imu_buffer = \
-                self.imu_buffer[0:, -self._imu_buffer_reduction_threshold:, :]
+        if self.a_imu_buffer.shape[0] > self._imu_buffer_size_limit:
+            self.a_imu_buffer = \
+                self.a_imu_buffer[-self._imu_buffer_reduction_threshold:, :]
+            self.w_imu_buffer = \
+                self.w_imu_buffer[-self._imu_buffer_reduction_threshold:]
 
-        self.imu_buffer = \
-            torch.cat((self.imu_buffer,
-                       torch.tensor([timestamp] + list(sample),
-                                    dtype=self.data_type, requires_grad=False,
-                                    device=self.device).view(1, 1, -1)
-                       ), dim=1)
+        self.a_imu_buffer = \
+            torch.cat((self.a_imu_buffer,
+                       torch.tensor(
+                           [[timestamp] +
+                            [i * self.delta_t for i in list(a_sample)]],
+                           dtype=self.data_type, requires_grad=False,
+                           device=self.device)
+                       ), dim=0)
+
+        self.w_imu_buffer = \
+            torch.cat(
+                (self.w_imu_buffer,
+                 (self.identity_matrix + self.delta_t *
+                  self.skew_matrix_from_tensor(w_sample)).view(1, 3, 3)
+                 ), dim=0)
 
         # Informs this thread that new samples have been generated.
         self._imu_samples_arrived.set()
@@ -1169,7 +1185,7 @@ predictions.
 
         # We only can start predicting positions after we have the
         # sampling_window_size IMU samples collected.
-        while self.imu_buffer.shape[1] < self.sampling_window_size:
+        while self.a_imu_buffer.shape[0] < self.sampling_window_size:
             time.sleep(1)
 
         # Put pytorch module into evaluation mode (batchnorm and dropout need).
@@ -1185,19 +1201,19 @@ predictions.
             prediction_closest_timestamp, prediction_idx = \
                 IMUHandler.find_nearest(
                     self.predictions_buffer[:, 0],
-                    self.imu_buffer[0, -self.sampling_window_size, 0]
+                    self.a_imu_buffer[-self.sampling_window_size, 0]
                 )
 
             # We also need the prediction's closest reading, that may not be
             # the one at sampling_window_size before
             imu_closest_timestamp, imu_idx = \
                 IMUHandler.find_nearest(
-                    self.imu_buffer[0, :, 0],
+                    self.a_imu_buffer[:, 0],
                     prediction_closest_timestamp
                 )
 
             # We need to now for what time we are calculating position.
-            current_timestamp = self.imu_buffer[0:, -1, 0:1]
+            current_timestamp = self.a_imu_buffer[-1, 0:1]
 
             # Registers that there are no more NEW imu readings to process.
             self._imu_samples_arrived.clear()
@@ -1208,8 +1224,9 @@ predictions.
                     torch.cat((
                         current_timestamp,
                         self.predictions_buffer[prediction_idx, 1:] +
-                        self(self.imu_buffer[0:, imu_idx:, 1:])
-                    ), dim=1)
+                        # We discard the timestamp in a_imu_buffer
+                        self(self.a_imu_buffer[imu_idx:, 1:], self.w_imu_buffer[imu_idx:])[:7]
+                    ), dim=0).view(1, -1)
                 ))
 
             self.new_predictions_arrived.set()
@@ -1228,33 +1245,36 @@ index in the original array.
         idx = (absolute(tensor_to_search - value)).argmin()
         return tensor_to_search[idx], idx
 
-    def delta_r_v_p(self, w_samples, a_samples, initial_velocity=0):
+    def delta_r_v_p(self, a_samples, w_samples, initial_velocity=0):
         """
     This method computes delta R, v and p (orientation, velocity and position),
     according to https://arxiv.org/abs/2101.07061 and
     https://arxiv.org/abs/1512.02363 about inertial feature preintegration.
 
-        :param w_samples: IMU gyroscope input samples to compute over.
         :param a_samples: IMU accelerometer input samples to compute over.
+        :param w_samples: IMU gyroscope input samples to compute over.
         :param initial_velocity: Whenever using a statefull approach, passing
         initial_velocity will bring up better preintegration results.
         :return: R (converted from matriz into quaternion), v and p (both 3D tensors).
         """
         # orientation matrix
-        delta_r = torch.eye(n=3, m=3)
+        delta_r = self.identity_matrix.clone()
         # velocity tensor (3 element)
         delta_v = 0.0
         # position tensor (3 element)
         delta_p = 0.0
+
+        # avoid dividing delta_t by 2 on every loop iteration
+        delta_t_divided_by_2 = self.delta_t / 2
 
         # interactive productory and summation steps
         for w_k, a_k in zip(w_samples, a_samples):
             delta_r = torch.matmul(delta_r, w_k)
             delta_v += torch.matmul(delta_r, a_k)
             # Slightly different from original paper, now including
-            # initial_velocity to compute CURRENT velcity, not
+            # initial_velocity to compute CURRENT velocity, not
             # only delta_v (variation)
-            delta_p += (initial_velocity + delta_v) * self.delta_t + delta_r * a_k * self.delta_t
+            delta_p += (initial_velocity + delta_v) * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2)
 
         # Converts R orientation matrix into equivalent skew matrix. SO(3) -> so(3)
         # phi is a simple rotation angle (the value in radians of the angle of rotation)
@@ -1267,13 +1287,13 @@ index in the original array.
 
         # From axis-angle notation into quaternion notation.
         # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-        quaternion_orientation_r = torch.zeros((4,))
+        quaternion_orientation_r = torch.zeros((4,), dtype=self.data_type, device=self.device)
         quaternion_orientation_r[0] = torch.cos(phi / 2)
         quaternion_orientation_r[1] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[0])
         quaternion_orientation_r[2] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[1])
         quaternion_orientation_r[3] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[2])
 
-        return quaternion_orientation_r, delta_v, delta_p, normalized_axis_r
+        return torch.cat((delta_p, quaternion_orientation_r, delta_v, normalized_axis_r), dim=-1)
 
     def skew_matrix_from_tensor(self, x):
         """
@@ -1286,7 +1306,7 @@ index in the original array.
             [0, -x[2], x[1]],
             [x[2], 0, -x[0]],
             [-x[1], x[0], 0],
-        ], dtype=self.data_type, device=self.device)
+        ], dtype=self.data_type, device=self.device, requires_grad=False)
 
     def tensor_from_skew_matrix(self, x):
         """
@@ -1296,4 +1316,14 @@ index in the original array.
         :return: Associated tensor (3-element).
         """
         return torch.tensor([x[2][1], x[0][2], x[1][0]],
-                            dtype=self.data_type, device=self.device)
+                            dtype=self.data_type,
+                            device=self.device,
+                            requires_grad=False)
+
+    def exp_matrix(self, skew_matrix):
+
+        norma = torch.norm(skew_matrix)
+
+        return self.identity_matrix + \
+               torch.sin(norma) / norma * skew_matrix + \
+               (1 - torch.cos(norma)) / (norma ** 2) * torch.matmul(skew_matrix, skew_matrix)

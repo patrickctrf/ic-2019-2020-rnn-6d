@@ -16,8 +16,8 @@ Runs the experiment itself.
     """
     # The model used for predictions
     sampling_window_size = 200
-    imu_handler = IMUHandler(sampling_window_size=sampling_window_size, device=device, data_type=torch.double)
-    imu_handler.load_feature_extractor()
+    imu_handler = IMUHandlerWithPreintegration(sampling_window_size=sampling_window_size, device=device, data_type=torch.double)
+    # imu_handler.load_feature_extractor()
     imu_handler.double()
     imu_handler.to(device)
 
@@ -30,11 +30,11 @@ Runs the experiment itself.
     input_features = input_data[:, 1:]
     output_features = output_data[:, 1:]
 
-    # Scaling data
-    input_scaler = StandardScaler()
-    input_features = input_scaler.fit_transform(input_features)
-    output_scaler = MinMaxScaler()
-    output_features = output_scaler.fit_transform(output_features)
+    # # Scaling data
+    # input_scaler = StandardScaler()
+    # input_features = input_scaler.fit_transform(input_features)
+    # output_scaler = MinMaxScaler()
+    # output_features = output_scaler.fit_transform(output_features)
 
     # Replacing scaled data (we kept the original TIMESTAMP)
     input_data[:, 1:] = input_features
@@ -53,7 +53,7 @@ Runs the experiment itself.
 
     with torch.no_grad():
         for i, x in tqdm(enumerate(input_features), total=input_features.shape[0]):
-            imu_handler.push_imu_sample_to_buffer(torch.tensor(x), input_timestamp[i])
+            imu_handler.push_imu_sample_to_buffer(x[:3], x[3:], input_timestamp[i])
             if i >= sampling_window_size:
                 imu_handler.new_predictions_arrived.wait()
                 predict[i], _ = (imu_handler.get_current_position())
@@ -73,6 +73,8 @@ Runs the experiment itself.
         plt.show()
 
     # ===========fim-de-PREDICAO-TRAJETORIO-INTEIRA=============================
+
+    imu_handler.stop_flag = True
 
     return imu_handler
 
