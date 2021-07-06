@@ -1169,8 +1169,7 @@ predictions.
         self.w_imu_buffer = \
             torch.cat(
                 (self.w_imu_buffer,
-                 (self.identity_matrix + self.delta_t *
-                  self.skew_matrix_from_tensor(w_sample)).view(1, 3, 3)
+                 self.exp_matrix(self.delta_t * self.skew_matrix_from_tensor(w_sample)).view(1, 3, 3)
                  ), dim=0)
 
         # Informs this thread that new samples have been generated.
@@ -1272,28 +1271,52 @@ index in the original array.
             delta_r = torch.matmul(delta_r, w_k)
             delta_v += torch.matmul(delta_r, a_k)
             # Slightly different from original paper, now including
-            # initial_velocity to compute CURRENT velocity, not
+            # initial_velocity (if available) to compute CURRENT velocity, not
             # only delta_v (variation)
             delta_p += (initial_velocity + delta_v) * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2)
 
+        # Converts R orientation matrix into equivalent axis-angle notation.
+        normalized_axis_r, phi = self.rotation_matrix_into_axis_angle(delta_r)
+
+        # Takes an axis-angle rotation into quaternion rotation
+        quaternion_orientation_r = self.axis_angle_into_quaternion(normalized_axis_r, phi)
+
+        return torch.cat((delta_p, quaternion_orientation_r, delta_v, normalized_axis_r), dim=-1)
+
+    def rotation_matrix_into_axis_angle(self, r_matrix):
+        """
+    Converts a 3x3 rotation matrix into equivalente axis-angle rotation.
+
+        :param r_matrix: 3x3 rotation matrix (tensor).
+        :return: Tuple -> (normalized_axis (3-element tensor), rotation angle)
+        """
         # Converts R orientation matrix into equivalent skew matrix. SO(3) -> so(3)
         # phi is a simple rotation angle (the value in radians of the angle of rotation)
-        phi = torch.acos((torch.trace(delta_r) - 1) / 2)
+        phi = torch.acos((torch.trace(r_matrix) - 1) / 2)
 
         # Skew "orientation" matrix into axis-angles tensor (3-element).
         # we do not multiply by phi, so we have a normalized rotation AXIS (in a SKEW matrix yet)
         # normalized because we didnt multiply the axis by the rotation angle (phi)
-        normalized_axis_r = self.tensor_from_skew_matrix((delta_r - delta_r.T) / (2 * torch.sin(phi)))
+        return self.tensor_from_skew_matrix((r_matrix - r_matrix.T) / (2 * torch.sin(phi))), phi
 
+    def axis_angle_into_quaternion(self, normalized_axis, angle):
+        """
+    Takes an axis-angle rotation and converts into quaternion rotation.
+    https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+
+        :param normalized_axis: Axis of rotation (3-element tensor).
+        :param angle: Simple rotation angle (float or 1-element tensor).
+        :return: 4-element tensor, containig quaternion (q0,q1,q2,q3).
+        """
         # From axis-angle notation into quaternion notation.
         # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
         quaternion_orientation_r = torch.zeros((4,), dtype=self.data_type, device=self.device)
-        quaternion_orientation_r[0] = torch.cos(phi / 2)
-        quaternion_orientation_r[1] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[0])
-        quaternion_orientation_r[2] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[1])
-        quaternion_orientation_r[3] = torch.sin(phi / 2) * torch.cos(normalized_axis_r[2])
+        quaternion_orientation_r[0] = torch.cos(angle / 2)
+        quaternion_orientation_r[1] = torch.sin(angle / 2) * torch.cos(normalized_axis[0])
+        quaternion_orientation_r[2] = torch.sin(angle / 2) * torch.cos(normalized_axis[1])
+        quaternion_orientation_r[3] = torch.sin(angle / 2) * torch.cos(normalized_axis[2])
 
-        return torch.cat((delta_p, quaternion_orientation_r, delta_v, normalized_axis_r), dim=-1)
+        return quaternion_orientation_r
 
     def skew_matrix_from_tensor(self, x):
         """
@@ -1325,5 +1348,5 @@ index in the original array.
         norma = torch.norm(skew_matrix)
 
         return self.identity_matrix + \
-               torch.sin(norma) / norma * skew_matrix + \
+               (torch.sin(norma) / norma) * skew_matrix + \
                (1 - torch.cos(norma)) / (norma ** 2) * torch.matmul(skew_matrix, skew_matrix)
