@@ -1018,20 +1018,32 @@ need to call this object.start() to begin updating positions in another thread.
         # A control flag ordering this thread to stop.
         self.stop_flag = False
 
-        # Here we are gonna store previous IMU samples and our estimated
+        # These buffers stores previous IMU samples and our estimated
         # positions at that time. Also, we need a timestamp info to synchronize
         # them. These buffers will grow as new samples and predictions arrive.
-        self.predictions_buffer = torch.zeros((1, 1 + position_output_size,),
-                                              dtype=self.data_type,
-                                              device=self.device,
-                                              requires_grad=False)
+        # The first buffer store translational position history and timestamp
+        # where each one was calculated.
+        self.position_predictions_buffer = torch.zeros((1, 1 + 3,),
+                                                       dtype=self.data_type,
+                                                       device=self.device,
+                                                       requires_grad=False)
+
+        # Store rotation matrices representing synchronous orientations.
+        # Since orientation info are "summed" by multiplying each other,
+        # first rotation is an identity matrix (neutral element).
+        self.orientation_predictions_buffer = \
+            torch.eye(n=3, m=3,
+                      dtype=self.data_type,
+                      device=self.device,
+                      requires_grad=False).view(1, 3, 3)
+
         # acceleration and angular velocity buffers
         self.a_imu_buffer = torch.zeros((1, 1 + 3,),
                                         dtype=self.data_type,
                                         device=self.device,
                                         requires_grad=False)
-        # We save angular velocity already converted into matrices, timestamp
-        # sinchronization is done within acceleration buffer.
+        # We save angular velocity already converted into skew-matrices,
+        # timestamp sinchronization is done within acceleration buffer.
         self.w_imu_buffer = torch.zeros((1, 3, 3),
                                         dtype=self.data_type,
                                         device=self.device,
@@ -1114,13 +1126,22 @@ timestamp indicating the time that position was estimated.
 
         :return: Tuple with (Tensor (1x7) containing latest position update; Respective position time reference).
         """
-        if self.predictions_buffer.shape[0] > 3 * self.sampling_window_size:
-            self.predictions_buffer = \
-                self.predictions_buffer[-2 * self.sampling_window_size:]
+        if self.position_predictions_buffer.shape[0] > 3 * self.sampling_window_size:
+            self.position_predictions_buffer = \
+                self.position_predictions_buffer[-2 * self.sampling_window_size:]
+            self.orientation_predictions_buffer = \
+                self.orientation_predictions_buffer[-2 * self.sampling_window_size:]
+
+        # Rotation/Orientation matrix into quaternion notation.
+        # Converts R orientation matrix into equivalent axis-angle notation.
+        normalized_axis_r, phi = self.rotation_matrix_into_axis_angle(self.orientation_predictions_buffer[-1])
+        # Takes an axis-angle rotation into quaternion rotation
+        quaternion_orientation_r = self.axis_angle_into_quaternion(normalized_axis_r, phi)
 
         self.new_predictions_arrived.clear()
+
         # Return the last position update and drop out the associated timestamp.
-        return self.predictions_buffer[-1, 1:], self.predictions_buffer[-1, 0]
+        return torch.cat((self.position_predictions_buffer[-1, 1:], quaternion_orientation_r)), self.position_predictions_buffer[-1, 0]
 
     def set_initial_position(self, position, timestamp=time.time()):
         """
@@ -1137,8 +1158,18 @@ timestamp indicating the time that position was estimated.
         timestamp = torch.tensor(timestamp, device=self.device,
                                  dtype=self.data_type, requires_grad=False)
 
-        self.predictions_buffer[0, 1:] = position
-        self.predictions_buffer[0, 0:1] = timestamp
+        self.position_predictions_buffer[0, 1:] = position[:3]
+        self.position_predictions_buffer[0, 0:1] = timestamp
+
+        axis, angle = self.quaternion_into_axis_angle(position[3:])
+
+        # Converting anxis-angle into skew, and skew into rotation matrix.
+        self.orientation_predictions_buffer[0] = \
+            self.exp_matrix(
+                self.skew_matrix_from_tensor(
+                    axis * angle
+                )
+            )
 
         return
 
@@ -1199,7 +1230,7 @@ predictions.
             # search for the closest timestamp in prediction buffer.
             prediction_closest_timestamp, prediction_idx = \
                 IMUHandler.find_nearest(
-                    self.predictions_buffer[:, 0],
+                    self.position_predictions_buffer[:, 0],
                     self.a_imu_buffer[-self.sampling_window_size, 0]
                 )
 
@@ -1217,15 +1248,23 @@ predictions.
             # Registers that there are no more NEW imu readings to process.
             self._imu_samples_arrived.clear()
 
-            self.predictions_buffer = \
+            # We discard the timestamp in a_imu_buffer
+            predicao = self(self.a_imu_buffer[imu_idx:, 1:], self.w_imu_buffer[imu_idx:])
+
+            self.position_predictions_buffer = \
                 torch.cat((
-                    self.predictions_buffer,
+                    self.position_predictions_buffer,
                     torch.cat((
                         current_timestamp,
-                        self.predictions_buffer[prediction_idx, 1:] +
-                        # We discard the timestamp in a_imu_buffer
-                        self(self.a_imu_buffer[imu_idx:, 1:], self.w_imu_buffer[imu_idx:])[:7]
+                        self.position_predictions_buffer[prediction_idx, 1:] +
+                        predicao[0]
                     ), dim=0).view(1, -1)
+                ))
+
+            self.orientation_predictions_buffer = \
+                torch.cat((
+                    self.orientation_predictions_buffer,
+                    torch.matmul(self.orientation_predictions_buffer[prediction_idx], predicao[1]).view(1, 3, 3)
                 ))
 
             self.new_predictions_arrived.set()
@@ -1275,13 +1314,7 @@ index in the original array.
             # only delta_v (variation)
             delta_p += (initial_velocity + delta_v) * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2)
 
-        # Converts R orientation matrix into equivalent axis-angle notation.
-        normalized_axis_r, phi = self.rotation_matrix_into_axis_angle(delta_r)
-
-        # Takes an axis-angle rotation into quaternion rotation
-        quaternion_orientation_r = self.axis_angle_into_quaternion(normalized_axis_r, phi)
-
-        return torch.cat((delta_p, quaternion_orientation_r, delta_v, normalized_axis_r), dim=-1)
+        return delta_p, delta_r, delta_v,
 
     def rotation_matrix_into_axis_angle(self, r_matrix):
         """
@@ -1312,11 +1345,33 @@ index in the original array.
         # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
         quaternion_orientation_r = torch.zeros((4,), dtype=self.data_type, device=self.device)
         quaternion_orientation_r[0] = torch.cos(angle / 2)
-        quaternion_orientation_r[1] = torch.sin(angle / 2) * torch.cos(normalized_axis[0])
-        quaternion_orientation_r[2] = torch.sin(angle / 2) * torch.cos(normalized_axis[1])
-        quaternion_orientation_r[3] = torch.sin(angle / 2) * torch.cos(normalized_axis[2])
+        quaternion_orientation_r[1] = torch.sin(angle / 2) * normalized_axis[0]
+        quaternion_orientation_r[2] = torch.sin(angle / 2) * normalized_axis[1]
+        quaternion_orientation_r[3] = torch.sin(angle / 2) * normalized_axis[2]
 
         return quaternion_orientation_r
+
+    def quaternion_into_axis_angle(self, quaternion):
+        """
+    Takes an quaternion rotation and converts into axis-angle rotation.
+    https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+
+        :param quaternion: 4-element tensor, containig quaternion (q0,q1,q2,q3).
+        :return: (Axis of rotation (3-element tensor), Simple rotation angle (float or 1-element tensor))
+        """
+        # Simple rotation angle
+        angle = torch.acos(quaternion[0]) * 2
+
+        # Avoids recalculating this sin.
+        sin_angle_2 = torch.sin(angle / 2)
+
+        # Rotation axis
+        normalized_axis = torch.zeros((3,))
+        normalized_axis[0] = quaternion[1] / sin_angle_2
+        normalized_axis[1] = quaternion[2] / sin_angle_2
+        normalized_axis[2] = quaternion[3] / sin_angle_2
+
+        return normalized_axis, angle
 
     def skew_matrix_from_tensor(self, x):
         """

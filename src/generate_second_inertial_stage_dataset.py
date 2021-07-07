@@ -59,6 +59,8 @@ Runs the experiment itself.
                 predict[i], _ = (imu_handler.get_current_position())
                 imu_handler.new_predictions_arrived.clear()
 
+        imu_handler.stop_flag = True
+
     predict = predict.view(predict.shape[0], -1).detach().cpu().numpy()
     save("predictions.npy", predict)
 
@@ -73,8 +75,6 @@ Runs the experiment itself.
         plt.show()
 
     # ===========fim-de-PREDICAO-TRAJETORIO-INTEIRA=============================
-
-    imu_handler.stop_flag = True
 
     return imu_handler
 
