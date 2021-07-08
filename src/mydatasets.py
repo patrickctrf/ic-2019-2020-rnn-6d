@@ -7,11 +7,13 @@ from torch.nn.utils.rnn import pack_sequence
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from ptk import find_nearest, timeseries_split
+from ptk import timeseries_split
 
 # Specifying which modules to import when "import *" is called over this module.
 # Also avoiding to import the smae things this module imports
 __all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset"]
+
+from ptk.utils.numpy import find_nearest
 
 
 class PackingSequenceDataloader(object):

@@ -15,7 +15,8 @@ from torch.utils.data import Subset
 from tqdm import tqdm
 
 from mydatasets import *
-from ptk.utils import *
+from ptk import DataManager
+from ptk.utils.torch import axis_angle_into_rotation_matrix, axis_angle_into_quaternion, rotation_matrix_into_axis_angle
 
 # When importing every models from this module, make sure only models are
 # imported
@@ -293,14 +294,14 @@ input sequence and returns the prediction for the final step.
 
 
 class PreintegrationModule(nn.Module):
-    def __init__(self, device=torch.device("cpu"), data_type=torch.float32, imu_freq=200):
+    def __init__(self, device=torch.device("cpu"), dtype=torch.float32, imu_freq=200):
         super().__init__()
         self.device = device
-        self.data_type = data_type
+        self.dtype = dtype
 
         self.delta_t = 1 / 200.0
 
-        self.identity_matrix = torch.eye(n=3, m=3, device=device, dtype=data_type)
+        self.identity_matrix = torch.eye(n=3, m=3, device=device, dtype=dtype)
 
     def forward(self, input_seq):
         """
@@ -326,7 +327,7 @@ class PreintegrationModule(nn.Module):
 
         # interactive productory and summation steps
         for w_k, a_k in zip(input_seq[0, :, :3], input_seq[0, :, 3:]):
-            delta_r = torch.matmul(delta_r, torch.tensor(axis_angle_into_rotation_matrix(w_k.cpu().numpy(), self.delta_t), device=self.device, dtype=self.data_type))
+            delta_r = torch.matmul(delta_r, axis_angle_into_rotation_matrix(w_k, self.delta_t, device=self.device, dtype=self.dtype))
             delta_v += torch.matmul(delta_r, a_k * self.delta_t)
             # Slightly different from original paper, now including
             # initial_velocity (if available) to compute CURRENT velocity, not
@@ -334,7 +335,7 @@ class PreintegrationModule(nn.Module):
             delta_p += delta_v * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2 * self.delta_t)
 
         # noinspection PyTypeChecker
-        return torch.cat((delta_p, torch.tensor(axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r.cpu().numpy())), device=self.device, dtype=self.data_type)))  # , delta_v
+        return torch.cat((delta_p, axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r, device=self.device, dtype=self.dtype), device=self.device, dtype=self.dtype)))  # , delta_v
 
 
 class InertialModule(nn.Module):
@@ -759,7 +760,7 @@ Useful for updating params when 'set_params' is called.
 class IMUHandler(nn.Module, Thread):
 
     def __init__(self, sampling_window_size=200, imu_input_size=6,
-                 position_output_size=7, device=torch.device("cpu"), data_type=torch.float32):
+                 position_output_size=7, device=torch.device("cpu"), dtype=torch.float32):
         """
 This module receives IMU samples and uses the InertialModule to predict our
 current position at real time.
@@ -784,7 +785,7 @@ need to call this object.start() to begin updating positions in another thread.
         self._imu_input_size = imu_input_size
         self._position_output_size = position_output_size
         self.device = device
-        self.data_type = data_type
+        self.dtype = dtype
 
         # Event synchronizer for position updates. We'll only estimate a new
         # position if new IMU samples have arrived.
@@ -800,12 +801,12 @@ need to call this object.start() to begin updating positions in another thread.
         # positions at that time. Also, we need a timestamp info to synchronize
         # them. These buffers will grow as new samples and predictions arrive.
         self.predictions_buffer = torch.zeros((1, 1 + position_output_size,),
-                                              dtype=self.data_type,
+                                              dtype=self.dtype,
                                               device=self.device,
                                               requires_grad=False)
         # First dimension will always be 1, because of batch dimension.
         self.imu_buffer = torch.zeros((1, 1, 1 + imu_input_size,),
-                                      dtype=self.data_type,
+                                      dtype=self.dtype,
                                       device=self.device,
                                       requires_grad=False)
 
@@ -911,10 +912,10 @@ timestamp indicating the time that position was estimated.
         """
 
         position = torch.tensor(position, device=self.device,
-                                dtype=self.data_type, requires_grad=False)
+                                dtype=self.dtype, requires_grad=False)
 
         timestamp = torch.tensor(timestamp, device=self.device,
-                                 dtype=self.data_type, requires_grad=False)
+                                 dtype=self.dtype, requires_grad=False)
 
         self.predictions_buffer[0, 1:] = position
         self.predictions_buffer[0, 0:1] = timestamp
@@ -937,7 +938,7 @@ predictions.
         self.imu_buffer = \
             torch.cat((self.imu_buffer,
                        torch.tensor([timestamp] + list(sample),
-                                    dtype=self.data_type, requires_grad=False,
+                                    dtype=self.dtype, requires_grad=False,
                                     device=self.device).view(1, 1, -1)
                        ), dim=1)
 
@@ -1017,7 +1018,7 @@ class IMUHandlerWithPreintegration(nn.Module, Thread):
 
     def __init__(self, sampling_window_size=200, imu_input_size=6,
                  position_output_size=7, device=torch.device("cpu"),
-                 data_type=torch.float32, imu_frequency=200):
+                 dtype=torch.float32, imu_frequency=200):
         """
 This module receives IMU samples and uses the InertialModule to predict our
 current position at real time.
@@ -1042,7 +1043,7 @@ need to call this object.start() to begin updating positions in another thread.
         self._imu_input_size = imu_input_size
         self._position_output_size = position_output_size
         self.device = device
-        self.data_type = data_type
+        self.dtype = dtype
 
         # Event synchronizer for position updates. We'll only estimate a new
         # position if new IMU samples have arrived.
@@ -1053,7 +1054,7 @@ need to call this object.start() to begin updating positions in another thread.
 
         # Auxiliary variable
         self.identity_matrix = torch.eye(n=3, m=3,
-                                         dtype=self.data_type,
+                                         dtype=self.dtype,
                                          device=self.device,
                                          requires_grad=False)
 
@@ -1069,7 +1070,7 @@ need to call this object.start() to begin updating positions in another thread.
         # The first buffer store translational position history and timestamp
         # where each one was calculated.
         self.position_predictions_buffer = torch.zeros((1, 1 + 3,),
-                                                       dtype=self.data_type,
+                                                       dtype=self.dtype,
                                                        device=self.device,
                                                        requires_grad=False)
 
@@ -1078,19 +1079,19 @@ need to call this object.start() to begin updating positions in another thread.
         # first rotation is an identity matrix (neutral element).
         self.orientation_predictions_buffer = \
             torch.eye(n=3, m=3,
-                      dtype=self.data_type,
+                      dtype=self.dtype,
                       device=self.device,
                       requires_grad=False).view(1, 3, 3)
 
         # acceleration and angular velocity buffers
         self.a_imu_buffer = torch.zeros((1, 1 + 3,),
-                                        dtype=self.data_type,
+                                        dtype=self.dtype,
                                         device=self.device,
                                         requires_grad=False)
         # We save angular velocity already converted into skew-matrices,
         # timestamp sinchronization is done within acceleration buffer.
         self.w_imu_buffer = torch.zeros((1, 3, 3),
-                                        dtype=self.data_type,
+                                        dtype=self.dtype,
                                         device=self.device,
                                         requires_grad=False)
 
@@ -1198,10 +1199,10 @@ timestamp indicating the time that position was estimated.
         """
 
         position = torch.tensor(position, device=self.device,
-                                dtype=self.data_type, requires_grad=False)
+                                dtype=self.dtype, requires_grad=False)
 
         timestamp = torch.tensor(timestamp, device=self.device,
-                                 dtype=self.data_type, requires_grad=False)
+                                 dtype=self.dtype, requires_grad=False)
 
         self.position_predictions_buffer[0, 1:] = position[:3]
         self.position_predictions_buffer[0, 0:1] = timestamp
@@ -1238,7 +1239,7 @@ predictions.
                        torch.tensor(
                            [[timestamp] +
                             [i * self.delta_t for i in list(a_sample)]],
-                           dtype=self.data_type, requires_grad=False,
+                           dtype=self.dtype, requires_grad=False,
                            device=self.device)
                        ), dim=0)
 
@@ -1388,7 +1389,7 @@ index in the original array.
         """
         # From axis-angle notation into quaternion notation.
         # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-        quaternion_orientation_r = torch.zeros((4,), dtype=self.data_type, device=self.device)
+        quaternion_orientation_r = torch.zeros((4,), dtype=self.dtype, device=self.device)
         quaternion_orientation_r[0] = torch.cos(angle / 2)
         quaternion_orientation_r[1] = torch.sin(angle / 2) * normalized_axis[0]
         quaternion_orientation_r[2] = torch.sin(angle / 2) * normalized_axis[1]
@@ -1429,7 +1430,7 @@ index in the original array.
             [0, -x[2], x[1]],
             [x[2], 0, -x[0]],
             [-x[1], x[0], 0],
-        ], dtype=self.data_type, device=self.device, requires_grad=False)
+        ], dtype=self.dtype, device=self.device, requires_grad=False)
 
     def tensor_from_skew_matrix(self, x):
         """
@@ -1439,7 +1440,7 @@ index in the original array.
         :return: Associated tensor (3-element).
         """
         return torch.tensor([x[2][1], x[0][2], x[1][0]],
-                            dtype=self.data_type,
+                            dtype=self.dtype,
                             device=self.device,
                             requires_grad=False)
 
