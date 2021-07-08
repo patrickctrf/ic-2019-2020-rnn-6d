@@ -21,10 +21,10 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    # model = InertialModule(input_size=6, hidden_layer_size=128, n_lstm_units=1, bidirectional=True,
-    #                        output_size=7, training_batch_size=1024, epochs=150, device=device, validation_percent=0.2)
+    model = InertialModule(input_size=6, hidden_layer_size=128, n_lstm_units=1, bidirectional=True,
+                           output_size=7, training_batch_size=1024, epochs=20, device=device, validation_percent=0.2)
 
-    model = PreintegrationModule(device=device)
+    # model = PreintegrationModule(device=device)
 
     # Carrega o extrator de features convolucional pretreinado e congela (grad)
     # model.load_feature_extractor()
@@ -57,7 +57,7 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    # model.fit()
+    model.fit()
 
     model.eval()
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
@@ -93,7 +93,7 @@ if __name__ == '__main__':
 
     # plot_csv()
 
-    if False and torch.cuda.is_available():
+    if torch.cuda.is_available():
         dev = "cuda:0"
         print("Usando GPU")
     else:

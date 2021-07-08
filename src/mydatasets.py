@@ -1,8 +1,8 @@
+import numpy as np
 import torch
-from numpy import arange, random, ones, hstack, array, cumsum, argwhere, load, zeros, save, array_split, where
 from pandas import read_csv
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from torch import int64, from_numpy, cat
+from torch import from_numpy, cat
 from torch.nn.utils.rnn import pack_sequence
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
@@ -13,7 +13,7 @@ from ptk import timeseries_split
 # Also avoiding to import the smae things this module imports
 __all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset"]
 
-from ptk.utils.numpy import find_nearest
+from ptk.utils.numpy import find_nearest, quaternion_into_axis_angle, axis_angle_into_rotation_matrix, rotation_matrix_into_axis_angle, axis_angle_into_quaternion
 
 
 class PackingSequenceDataloader(object):
@@ -36,8 +36,8 @@ Utility class for loading data with input already formated as packed sequences
         # apenas que o ultimo batch sera menor que os demais
         self.length = len(dataset) // self.batch_size + (len(dataset) % self.batch_size > 0)
 
-        self.shuffle_array = arange(self.length)
-        if shuffle is True: random.shuffle(self.shuffle_array)
+        self.shuffle_array = np.arange(self.length)
+        if shuffle is True: np.random.shuffle(self.shuffle_array)
 
     def __iter__(self):
         """
@@ -109,17 +109,17 @@ class AsymetricalTimeseriesDataset(Dataset):
         # We discount the window SIZE from the total number of samples (timeseries).
         # P.S.: It MUST use OUTPUT shape, because unlabeled data doesnt not help us.
         # P.S. 2: The first window_size is min_window_size, NOT 1.
-        n_samples_per_window_size = ones((max_window_size - min_window_size,)) * self.output_data.shape[0] - arange(min_window_size + 1, max_window_size + 1)
+        n_samples_per_window_size = np.ones((max_window_size - min_window_size,)) * self.output_data.shape[0] - np.arange(min_window_size + 1, max_window_size + 1)
 
         # Now, we know the last index where we can sample for each window size.
         # Concatenate element [0] in the begining to avoid error on first indices.
-        self.last_window_sample_idx = hstack((array([0]), cumsum(n_samples_per_window_size))).astype("int")
+        self.last_window_sample_idx = np.hstack((np.array([0]), np.cumsum(n_samples_per_window_size))).astype("int")
 
         self.length = int(n_samples_per_window_size.sum())
-        self.indices = arange(self.length)
+        self.indices = np.arange(self.length)
 
-        self.shuffle_array = arange(self.length)
-        if shuffle is True: random.shuffle(self.shuffle_array)
+        self.shuffle_array = np.arange(self.length)
+        if shuffle is True: np.random.shuffle(self.shuffle_array)
 
         return
 
@@ -141,7 +141,7 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             # shuffling indices before return
             idx = self.shuffle_array[idx]
 
-            argwhere_result = argwhere(self.last_window_sample_idx < idx)
+            argwhere_result = np.argwhere(self.last_window_sample_idx < idx)
             window_size = self.min_window_size + (argwhere_result[-1][0] if argwhere_result.size != 0 else 0)
 
             window_start_idx = idx - self.last_window_sample_idx[(argwhere_result[-1][0] if argwhere_result.size != 0 else 0)]
@@ -150,12 +150,36 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             _, x_finish_idx = find_nearest(self.input_timestamp, self.output_timestamp[window_start_idx + window_size])
 
             x = self.input_data[x_start_idx: x_finish_idx + 1]
+            # Position variation. Quaternion variation not ready yet.
             y = self.output_data[window_start_idx + window_size] - self.output_data[window_start_idx]
+            # Calculate quaternion variation.Converts into rotation matriz first
+            y[3:] = \
+                axis_angle_into_quaternion(
+                    *rotation_matrix_into_axis_angle(
+                        # multiplication between current orientation matrix and
+                        # inverse of PREVIOUS orientation matrix must give us
+                        # orientation variation.
+                        np.matmul(
+                            # Current orientation matrix (from quaternion)
+                            axis_angle_into_rotation_matrix(
+                                *quaternion_into_axis_angle(
+                                    self.output_data[window_start_idx + window_size][3:]
+                                )
+                            ),
+                            # inverse (r.transpose) matrix of previous quaternion
+                            axis_angle_into_rotation_matrix(
+                                *quaternion_into_axis_angle(
+                                    self.output_data[window_start_idx][3:]
+                                )
+                            ).T
+                        )
+                    )
+                )
 
             # We add gaussian noise to data, if configured to.
             if self.noise is not None:
-                x = x + random.normal(loc=self.noise[0], scale=self.noise[1], size=x.shape)
-                y = y + random.normal(loc=self.noise[0], scale=self.noise[1], size=y.shape)
+                x = x + np.random.normal(loc=self.noise[0], scale=self.noise[1], size=x.shape)
+                y = y + np.random.normal(loc=self.noise[0], scale=self.noise[1], size=y.shape)
 
             # If we want to convert into torch tensors first
             if self.convert_first is True:
@@ -219,20 +243,20 @@ class BatchTimeseriesDataset(Dataset):
                                          reference_y_csv_path=reference_y_csv_path)
 
         try:
-            tabela = load(str(max_window_size) + str(min_window_size) +
-                          str(x_csv_path).replace("/", "_").replace(".", "_") +
-                          "_tabela_elementos_dataset.npy")
+            tabela = np.load(str(max_window_size) + str(min_window_size) +
+                             str(x_csv_path).replace("/", "_").replace(".", "_") +
+                             "_tabela_elementos_dataset.npy")
 
         except FileNotFoundError as e:
             print("Indexing dataset samples:")
-            tabela = zeros((len(self.base_dataset),))
+            tabela = np.zeros((len(self.base_dataset),))
             i = 0
             for element in tqdm(self.base_dataset):
                 tabela[i] = element[0].shape[0]
                 i = i + 1
-            save(str(max_window_size) + str(min_window_size) +
-                 str(x_csv_path).replace("/", "_").replace(".", "_") +
-                 "_tabela_elementos_dataset.npy", tabela)
+            np.save(str(max_window_size) + str(min_window_size) +
+                    str(x_csv_path).replace("/", "_").replace(".", "_") +
+                    "_tabela_elementos_dataset.npy", tabela)
 
         # dict_count = Counter(tabela)
         # ocorrencias = array(list(dict_count.values()))
@@ -249,23 +273,23 @@ class BatchTimeseriesDataset(Dataset):
         # mesmo tamanho talvez nao seja um multiplo inteiro do batch_size
         # escolhido
         for i in tqdm(range(tabela.min().astype("int"), tabela.max().astype("int") + 1)):
-            if where(tabela == i)[0].shape[0] // self.batch_size + (where(tabela == i)[0].shape[0] % self.batch_size > 0) <= 1:
+            if np.where(tabela == i)[0].shape[0] // self.batch_size + (np.where(tabela == i)[0].shape[0] % self.batch_size > 0) <= 1:
                 # Se nao houver nenhuma sample daquele tamanho, pule a iteracao
                 # Se houver so 1 sample, pularemos tambem, porque a Batchnorm
                 # buga e um batch com so 1 sample eh instavel demais
                 pass
             else:
                 self.lista_de_arrays_com_mesmo_comprimento.extend(
-                    array_split(where(tabela == i)[0],
-                                where(tabela == i)[0].shape[0] // self.batch_size + (where(tabela == i)[0].shape[0] % self.batch_size > 0))
+                    np.array_split(np.where(tabela == i)[0],
+                                   np.where(tabela == i)[0].shape[0] // self.batch_size + (np.where(tabela == i)[0].shape[0] % self.batch_size > 0))
                 )
 
         self.length = len(self.lista_de_arrays_com_mesmo_comprimento)
 
-        self.shuffle_array = arange(self.length)
+        self.shuffle_array = np.arange(self.length)
 
         if shuffle is True:
-            random.shuffle(self.shuffle_array)
+            np.random.shuffle(self.shuffle_array)
 
         return
 

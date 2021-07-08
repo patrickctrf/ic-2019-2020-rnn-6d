@@ -401,12 +401,15 @@ error within CUDA.
 
         n_base_filters = 8
         n_output_features = 8
-        self.feature_extractor = \
-            LSTMLatentFeatures(input_size=input_size,
-                               hidden_layer_size=hidden_layer_size,
-                               output_size=output_size,
-                               n_lstm_units=n_lstm_units,
-                               bidirectional=bidirectional)
+        # self.feature_extractor = \
+        #     LSTMLatentFeatures(input_size=input_size,
+        #                        hidden_layer_size=hidden_layer_size,
+        #                        output_size=output_size,
+        #                        n_lstm_units=n_lstm_units,
+        #                        bidirectional=bidirectional)
+
+        self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
+                                                        output_size=output_size)
 
         self.dense_network = self.feature_extractor.dense_network
 
@@ -421,23 +424,23 @@ input sequence and returns the prediction for the final step.
         :return: The prediction in the end of the series.
         """
 
-        # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # convolucao e precisam vir no meio para o pytorch
+        # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # # convolucao e precisam vir no meio para o pytorch
         # input_seq = movedim(input_seq, -2, -1)
         #
-        # output_seq = self.feature_extractor(input_seq)
-        #
-        # predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
-
         output_seq = self.feature_extractor(input_seq)
 
-        # All batch size, whatever sequence length, forward direction and
-        # lstm output size (hidden size).
-        # We only want the last output of lstm (end of sequence), that is
-        # the reason of '[:,-1,:]'.
-        output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
 
-        predictions = self.dense_network(output_seq)
+        # output_seq = self.feature_extractor(input_seq)
+        #
+        # # # All batch size, whatever sequence length, forward direction and
+        # # # lstm output size (hidden size).
+        # # # We only want the last output of lstm (end of sequence), that is
+        # # # the reason of '[:,-1,:]'.
+        # # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        #
+        # predictions = self.dense_network(output_seq)
 
         return predictions
 
@@ -495,7 +498,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
 
@@ -505,7 +508,7 @@ overflow the memory.
 
         tqdm_bar = tqdm(range(epochs))
         for i in tqdm_bar:
-            train_manager = DataManager(train_loader, device=self.device, buffer_size=2)
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=1)
             val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
             training_loss = 0.0
             validation_loss = 0.0
@@ -514,11 +517,11 @@ overflow the memory.
             # Voltamos ao modo treino
             self.train()
             for j, (X, y) in enumerate(train_manager):
-                # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                # ocorre erro no backward(). O tamanho do batch para a cell eh
-                # simplesmente o tamanho do batch em y ou X (tanto faz).
-                self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                                                            torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                # self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                #                                             torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
@@ -551,11 +554,11 @@ overflow the memory.
                 # validando o modelo no modo de evaluation
                 self.eval()
                 for j, (X, y) in enumerate(val_manager):
-                    # Precisamos resetar o hidden state do LSTM a cada batch, ou
-                    # ocorre erro no backward(). O tamanho do batch para a cell eh
-                    # simplesmente o tamanho do batch em y ou X (tanto faz).
-                    self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
-                                                                torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
+                    # # Precisamos resetar o hidden state do LSTM a cada batch, ou
+                    # # ocorre erro no backward(). O tamanho do batch para a cell eh
+                    # # simplesmente o tamanho do batch em y ou X (tanto faz).
+                    # self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
+                    #                                             torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
