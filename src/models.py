@@ -19,7 +19,7 @@ from ptk.utils import *
 
 # When importing every models from this module, make sure only models are
 # imported
-__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer", "IMUHandlerWithPreintegration"]
+__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer", "IMUHandlerWithPreintegration", "PreintegrationModule"]
 
 
 class ResBlock(nn.Module):
@@ -290,6 +290,51 @@ input sequence and returns the prediction for the final step.
             self.sum_layer(input_seq),
             self.adaptive_pooling(input_seq),
         ), dim=1)
+
+
+class PreintegrationModule(nn.Module):
+    def __init__(self, device=torch.device("cpu"), data_type=torch.float32, imu_freq=200):
+        super().__init__()
+        self.device = device
+        self.data_type = data_type
+
+        self.delta_t = 1 / 200.0
+
+        self.identity_matrix = torch.eye(n=3, m=3, device=device, dtype=data_type)
+
+    def forward(self, input_seq):
+        """
+    This method computes delta R, v and p (orientation, velocity and position),
+    according to https://arxiv.org/abs/2101.07061 and
+    https://arxiv.org/abs/1512.02363 about inertial feature preintegration.
+
+        :param a_samples: IMU accelerometer input samples to compute over.
+        :param w_samples: IMU gyroscope input samples to compute over.
+        :param initial_velocity: Whenever using a statefull approach, passing
+        initial_velocity will bring up better preintegration results.
+        :return: R (converted from matriz into quaternion), v and p (both 3D tensors).
+        """
+        # orientation matrix
+        delta_r = self.identity_matrix.clone()
+        # velocity tensor (3 element)
+        delta_v = 0.0
+        # position tensor (3 element)
+        delta_p = 0.0
+
+        # avoid dividing delta_t by 2 on every loop iteration
+        delta_t_divided_by_2 = self.delta_t / 2
+
+        # interactive productory and summation steps
+        for w_k, a_k in zip(input_seq[0, :, :3], input_seq[0, :, 3:]):
+            delta_r = torch.matmul(delta_r, torch.tensor(axis_angle_into_rotation_matrix(w_k.cpu().numpy(), self.delta_t), device=self.device, dtype=self.data_type))
+            delta_v += torch.matmul(delta_r, a_k * self.delta_t)
+            # Slightly different from original paper, now including
+            # initial_velocity (if available) to compute CURRENT velocity, not
+            # only delta_v (variation)
+            delta_p += delta_v * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2 * self.delta_t)
+
+        # noinspection PyTypeChecker
+        return torch.cat((delta_p, torch.tensor(axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r.cpu().numpy())), device=self.device, dtype=self.data_type)))  # , delta_v
 
 
 class InertialModule(nn.Module):
@@ -1314,7 +1359,7 @@ index in the original array.
             # only delta_v (variation)
             delta_p += (initial_velocity + delta_v) * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2)
 
-        return delta_p, delta_r, delta_v,
+        return delta_p, delta_r, delta_v
 
     def rotation_matrix_into_axis_angle(self, r_matrix):
         """

@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from mydatasets import *
 from ptk.timeseries import *
-from models import InertialModule
+from models import *
 
 
 def experiment():
@@ -21,8 +21,10 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = InertialModule(input_size=6, hidden_layer_size=128, n_lstm_units=1, bidirectional=True,
-                           output_size=7, training_batch_size=1024, epochs=150, device=device, validation_percent=0.2)
+    # model = InertialModule(input_size=6, hidden_layer_size=128, n_lstm_units=1, bidirectional=True,
+    #                        output_size=7, training_batch_size=1024, epochs=150, device=device, validation_percent=0.2)
+
+    model = PreintegrationModule(device=device)
 
     # Carrega o extrator de features convolucional pretreinado e congela (grad)
     # model.load_feature_extractor()
@@ -55,12 +57,12 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    model.fit()
+    # model.fit()
 
     model.eval()
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                     min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
+                                                     min_window_size=10, max_window_size=11, shuffle=False, device=device, convert_first=True)
 
     predict = []
     reference = []
@@ -78,7 +80,7 @@ Runs the experiment itself.
         plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.savefig(dim_name + ".png", dpi=200)
-        # plt.show()
+        plt.show()
 
     # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 
@@ -91,7 +93,7 @@ if __name__ == '__main__':
 
     # plot_csv()
 
-    if torch.cuda.is_available():
+    if False and torch.cuda.is_available():
         dev = "cuda:0"
         print("Usando GPU")
     else:
