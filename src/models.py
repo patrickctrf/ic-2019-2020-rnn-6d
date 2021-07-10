@@ -223,7 +223,7 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 8
+        n_base_filters = 16
         n_output_features = self.output_size
         self.feature_extractor = \
             Sequential(
@@ -242,15 +242,15 @@ error within CUDA.
                 SqueezeAndExcitationBlock1D(3 * n_base_filters),
                 Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
                 SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
-                SqueezeAndExcitationBlock1D(n_output_features)
+                Conv1d(2 * n_base_filters, 2 * n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
+                SqueezeAndExcitationBlock1D(2 * n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.1),
+            nn.Linear(2 * pooling_output_size * (2 * n_output_features), 16), nn.PReLU(num_parameters=16, init=0.1),
             # nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
             # nn.Linear(16, 8), nn.PReLU(num_parameters=8, init=0.8),
             # nn.BatchNorm1d(8, affine=True),
@@ -338,7 +338,8 @@ class PreintegrationModule(nn.Module):
             delta_p += delta_v * self.delta_t + torch.matmul(delta_r, a_k * square_delta_t_divided_by_2)
 
         # noinspection PyTypeChecker
-        return torch.cat((delta_p.squeeze(2), axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r, device=self.device, dtype=self.dtype), device=self.device, dtype=self.dtype)), dim=1)  # , delta_v
+        return torch.cat((delta_p.squeeze(2), axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r, device=self.device, dtype=self.dtype), device=self.device, dtype=self.dtype)),
+                         dim=1)  # , delta_v
 
 
 class SingleSamplePreintegrationModule(nn.Module):
