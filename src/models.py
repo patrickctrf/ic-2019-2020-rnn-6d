@@ -223,8 +223,8 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 16
-        n_output_features = self.output_size
+        n_base_filters = 64
+        n_output_features = 32
         self.feature_extractor = \
             Sequential(
                 #
@@ -232,6 +232,7 @@ error within CUDA.
                 # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
+                nn.BatchNorm1d(input_size, affine=False),
                 Conv1d(input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
                 Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
                 nn.Dropout2d(p=0.5),
@@ -242,17 +243,17 @@ error within CUDA.
                 SqueezeAndExcitationBlock1D(3 * n_base_filters),
                 Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
                 SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 2 * n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
-                SqueezeAndExcitationBlock1D(2 * n_output_features)
+                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
+                SqueezeAndExcitationBlock1D(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * (2 * n_output_features), 16), nn.PReLU(num_parameters=16, init=0.1),
+            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.01),
             # nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
-            # nn.Linear(16, 8), nn.PReLU(num_parameters=8, init=0.8),
+            nn.Linear(16, 16), nn.PReLU(num_parameters=16, init=0.01),
             # nn.BatchNorm1d(8, affine=True),
             nn.Linear(16, self.output_size)
         )
@@ -506,7 +507,7 @@ overflow the memory.
                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
@@ -540,7 +541,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
 
