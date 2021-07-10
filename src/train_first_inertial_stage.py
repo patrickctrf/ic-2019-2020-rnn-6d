@@ -24,6 +24,8 @@ Runs the experiment itself.
     model = InertialModule(input_size=6, hidden_layer_size=128, n_lstm_units=1, bidirectional=True,
                            output_size=7, training_batch_size=1024, epochs=20, device=device, validation_percent=0.2)
 
+    # model.load_state_dict(torch.load("best_model_state_dict.pth"))
+
     # model = PreintegrationModule(device=device)
 
     # Carrega o extrator de features convolucional pretreinado e congela (grad)
@@ -62,7 +64,7 @@ Runs the experiment itself.
     model.eval()
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                     min_window_size=10, max_window_size=11, shuffle=False, device=device, convert_first=True)
+                                                     min_window_size=100, max_window_size=101, shuffle=False, device=device, convert_first=True)
 
     predict = []
     reference = []

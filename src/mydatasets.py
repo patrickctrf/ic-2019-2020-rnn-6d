@@ -79,23 +79,23 @@ class AsymetricalTimeseriesDataset(Dataset):
         self.device = device
         self.noise = noise
 
-        # =========SCALING======================================================
-        # features without timestamp (we do not scale timestamp)
-        input_features = self.input_data[:, 1:]
-        output_features = self.output_data[:, 1:]
-
-        # Scaling data
-        self.input_scaler, self.output_scaler = \
-            AsymetricalTimeseriesDataset.get_reference_scaler(
-                reference_x_csv_path, reference_y_csv_path
-            )
-        input_features = self.input_scaler.transform(input_features)
-        output_features = self.output_scaler.transform(output_features)
-
-        # Replacing scaled data (we kept the original TIMESTAMP)
-        self.input_data[:, 1:] = input_features
-        self.output_data[:, 1:] = output_features
-        # =========end-SCALING==================================================
+        # # =========SCALING======================================================
+        # # features without timestamp (we do not scale timestamp)
+        # input_features = self.input_data[:, 1:]
+        # output_features = self.output_data[:, 1:]
+        #
+        # # Scaling data
+        # self.input_scaler, self.output_scaler = \
+        #     AsymetricalTimeseriesDataset.get_reference_scaler(
+        #         reference_x_csv_path, reference_y_csv_path
+        #     )
+        # input_features = self.input_scaler.transform(input_features)
+        # output_features = self.output_scaler.transform(output_features)
+        #
+        # # Replacing scaled data (we kept the original TIMESTAMP)
+        # self.input_data[:, 1:] = input_features
+        # self.output_data[:, 1:] = output_features
+        # # =========end-SCALING==================================================
 
         # Save timestamps for syncing samples.
         self.input_timestamp = self.input_data[:, 0]

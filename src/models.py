@@ -299,7 +299,7 @@ class PreintegrationModule(nn.Module):
         self.device = device
         self.dtype = dtype
 
-        self.delta_t = 1 / 200.0
+        self.delta_t = 1 / imu_freq
 
         self.identity_matrix = torch.eye(n=3, m=3, device=device, dtype=dtype)
 
@@ -324,18 +324,56 @@ class PreintegrationModule(nn.Module):
 
         # avoid dividing delta_t by 2 on every loop iteration
         delta_t_divided_by_2 = self.delta_t / 2
+        square_delta_t_divided_by_2 = delta_t_divided_by_2 * self.delta_t
 
+        w = input_seq.movedim(1, 0)[:, :, :3]
+        a = input_seq.movedim(1, 0)[:, :, 3:].unsqueeze(3)
         # interactive productory and summation steps
-        for w_k, a_k in zip(input_seq[0, :, :3], input_seq[0, :, 3:]):
+        for w_k, a_k in zip(w, a):
             delta_r = torch.matmul(delta_r, axis_angle_into_rotation_matrix(w_k, self.delta_t, device=self.device, dtype=self.dtype))
             delta_v += torch.matmul(delta_r, a_k * self.delta_t)
             # Slightly different from original paper, now including
             # initial_velocity (if available) to compute CURRENT velocity, not
             # only delta_v (variation)
-            delta_p += delta_v * self.delta_t + torch.matmul(delta_r, a_k * delta_t_divided_by_2 * self.delta_t)
+            delta_p += delta_v * self.delta_t + torch.matmul(delta_r, a_k * square_delta_t_divided_by_2)
 
         # noinspection PyTypeChecker
-        return torch.cat((delta_p, axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r, device=self.device, dtype=self.dtype), device=self.device, dtype=self.dtype)))  # , delta_v
+        return torch.cat((delta_p.squeeze(2), axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r, device=self.device, dtype=self.dtype), device=self.device, dtype=self.dtype)), dim=1)  # , delta_v
+
+
+class SingleSamplePreintegrationModule(nn.Module):
+    def __init__(self, device=torch.device("cpu"), dtype=torch.float32, imu_freq=200):
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+
+        self.delta_t = 1 / imu_freq
+
+        self.identity_matrix = torch.eye(n=3, m=3, device=device, dtype=dtype)
+
+    def forward(self, input_seq):
+        """
+    This method computes delta R, v and p (orientation, velocity and position),
+    according to https://arxiv.org/abs/2101.07061 and
+    https://arxiv.org/abs/1512.02363 about inertial feature preintegration.
+
+        :param a_samples: IMU accelerometer input samples to compute over.
+        :param w_samples: IMU gyroscope input samples to compute over.
+        :param initial_velocity: Whenever using a statefull approach, passing
+        initial_velocity will bring up better preintegration results.
+        :return: R (converted from matriz into quaternion), v and p (both 3D tensors).
+        """
+
+        # w, a
+        # input_seq[0, :, :3], input_seq[0, :, 3:]
+
+        # single sample productory and summation steps
+        delta_r = axis_angle_into_rotation_matrix(input_seq[0, :, :3], self.delta_t, device=self.device, dtype=self.dtype)
+        delta_v = torch.matmul(delta_r, input_seq[0, :, 3:] * self.delta_t)
+        delta_p = delta_v * self.delta_t + torch.matmul(delta_r, input_seq[0, :, 3:] * (self.delta_t ** 2) / 2)
+
+        # noinspection PyTypeChecker
+        return torch.cat((delta_p, axis_angle_into_quaternion(*rotation_matrix_into_axis_angle(delta_r, device=self.device, dtype=self.dtype), device=self.device, dtype=self.dtype), delta_v), dim=-1)
 
 
 class InertialModule(nn.Module):
@@ -407,6 +445,9 @@ error within CUDA.
         #                        output_size=output_size,
         #                        n_lstm_units=n_lstm_units,
         #                        bidirectional=bidirectional)
+
+        self.preintegration_module = \
+            SingleSamplePreintegrationModule(device=self.device)
 
         self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
                                                         output_size=output_size)
@@ -498,7 +539,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.00001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
 
