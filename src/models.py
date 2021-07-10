@@ -242,7 +242,7 @@ error within CUDA.
                 SqueezeAndExcitationBlock1D(3 * n_base_filters),
                 Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
                 SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, 2 * n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
+                Conv1d(2 * n_base_filters, 2 * n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features)
                 SqueezeAndExcitationBlock1D(2 * n_output_features)
             )
 
