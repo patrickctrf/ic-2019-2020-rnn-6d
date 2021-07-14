@@ -159,8 +159,8 @@ class EachSamplePreintegrationModule(nn.Module):
                 )
 
             # noinspection PyTypeChecker
-            return torch.cat((deltas_p.squeeze(3), deltas_q, deltas_v.squeeze(3))
-                             , dim=2)
+            return torch.cat((input_seq, deltas_p.squeeze(3), deltas_q,
+                              deltas_v.squeeze(3)), dim=2)
 
 
 class LSTMLatentFeatures(nn.Module):
@@ -515,7 +515,7 @@ error within CUDA.
         self.preintegration_module = \
             EachSamplePreintegrationModule(device=self.device)
 
-        self.feature_extractor = Conv1DFeatureExtractor(input_size=10,
+        self.feature_extractor = Conv1DFeatureExtractor(input_size=16,
                                                         output_size=output_size)
 
         self.dense_network = self.feature_extractor.dense_network
