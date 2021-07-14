@@ -285,7 +285,7 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 32
+        n_base_filters = 64
         n_output_features = 32
         self.feature_extractor = \
             Sequential(
