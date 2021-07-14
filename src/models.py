@@ -158,9 +158,9 @@ class EachSamplePreintegrationModule(nn.Module):
                     ), device=self.device, dtype=self.dtype
                 )
 
-            # noinspection PyTypeChecker
-            return torch.cat((input_seq, deltas_p.squeeze(3), deltas_q,
-                              deltas_v.squeeze(3)), dim=2)
+        # noinspection PyTypeChecker
+        return torch.cat((input_seq, deltas_p.squeeze(3), deltas_q,
+                          deltas_v.squeeze(3)), dim=2)
 
 
 class LSTMLatentFeatures(nn.Module):
