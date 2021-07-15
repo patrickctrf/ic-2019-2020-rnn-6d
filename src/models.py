@@ -499,25 +499,28 @@ error within CUDA.
         self.loss_function = None
         self.optimizer = None
 
+        self.preintegration_module = \
+            EachSamplePreintegrationModule(device=self.device)
+
         # ATTENTION: You cannot change this anymore, since we added a sum layer
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
         n_base_filters = 8
         n_output_features = 8
-        # self.feature_extractor = \
-        #     LSTMLatentFeatures(input_size=input_size,
-        #                        hidden_layer_size=hidden_layer_size,
-        #                        output_size=output_size,
-        #                        n_lstm_units=n_lstm_units,
-        #                        bidirectional=bidirectional)
+        self.feature_extractor = \
+            LSTMLatentFeatures(input_size=16,
+                               hidden_layer_size=hidden_layer_size,
+                               output_size=output_size,
+                               n_lstm_units=n_lstm_units,
+                               bidirectional=bidirectional)
 
-        self.preintegration_module = \
-            EachSamplePreintegrationModule(device=self.device)
+        # self.feature_extractor = Conv1DFeatureExtractor(input_size=16,
+        #                                                 output_size=output_size)
 
-        self.feature_extractor = Conv1DFeatureExtractor(input_size=16,
-                                                        output_size=output_size)
-
+        # Assim nao precisamos adaptar a rede densa a uma saida de CNN ou LSTM,
+        # ja pegamos a rede adaptada do proprio extrator de
+        # features (seja lstm ou CNN)
         self.dense_network = self.feature_extractor.dense_network
 
         return
@@ -533,23 +536,23 @@ input sequence and returns the prediction for the final step.
 
         input_seq = self.preintegration_module(input_seq)
 
-        # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # # convolucao e precisam vir no meio para o pytorch
-        # input_seq = movedim(input_seq, -2, -1)
-        #
-        output_seq = self.feature_extractor(input_seq)
-
-        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
-
+        # # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # # # convolucao e precisam vir no meio para o pytorch
+        # # input_seq = movedim(input_seq, -2, -1)
+        # #
         # output_seq = self.feature_extractor(input_seq)
         #
-        # # # All batch size, whatever sequence length, forward direction and
-        # # # lstm output size (hidden size).
-        # # # We only want the last output of lstm (end of sequence), that is
-        # # # the reason of '[:,-1,:]'.
-        # # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
-        #
-        # predictions = self.dense_network(output_seq)
+        # predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
+
+        output_seq = self.feature_extractor(input_seq)
+
+        # # All batch size, whatever sequence length, forward direction and
+        # # lstm output size (hidden size).
+        # # We only want the last output of lstm (end of sequence), that is
+        # # the reason of '[:,-1,:]'.
+        # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+
+        predictions = self.dense_network(output_seq[:, -1, :])
 
         return predictions
 
