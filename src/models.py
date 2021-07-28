@@ -20,7 +20,44 @@ from ptk.utils.torch import axis_angle_into_rotation_matrix, axis_angle_into_qua
 
 # When importing every models from this module, make sure only models are
 # imported
-__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer", "IMUHandlerWithPreintegration", "PreintegrationModule", "EachSamplePreintegrationModule"]
+__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer", "IMUHandlerWithPreintegration", "PreintegrationModule", "EachSamplePreintegrationModule", "SignalEnvelope"]
+
+
+class SignalEnvelope(nn.Module):
+    def __init__(self, n_channels=2, kernel_size_envelope=9, kernel_size_avg=20, norm_order=9):
+        super(SignalEnvelope, self).__init__()
+
+        self.norm_order = norm_order
+
+        # garante que o kernel seja impar
+        kernel_size = (kernel_size_envelope // 2) * 2 + 1
+        self.envelope_layer = Conv1d(n_channels, n_channels, (kernel_size,), padding=(kernel_size // 2,), padding_mode="replicate", bias=False).requires_grad_(False)
+        self.envelope_layer.weight[:, :, :] = torch.zeros(n_channels, n_channels, kernel_size, )
+        for i in range(n_channels):
+            self.envelope_layer.weight[i, i, :] = torch.ones(kernel_size, )
+
+        # garante que o kernel seja impar
+        kernel_size = (kernel_size_avg // 2) * 2 + 1
+        self.avg_layer = Conv1d(n_channels, n_channels, (kernel_size,), padding=(kernel_size // 2,), padding_mode="replicate", bias=False).requires_grad_(False)
+        self.avg_layer.weight[:, :, :] = torch.zeros(n_channels, n_channels, kernel_size, )
+        for i in range(n_channels):
+            self.avg_layer.weight[i, i, :] = torch.ones(kernel_size, ) / kernel_size
+
+    def forward(self, signal):
+        # Calculamos a media movel do sinal. A media movel eh uma curva com
+        # tendencia central em nossa distribuicao, enquanto que a media
+        # aritmetica seria apenas 1 numero constante, nao atendendo ao nosso
+        # objetivo.
+        media_movel_sinal = self.avg_layer(signal)
+
+        # cat(upper_envelope, lower_envelope)
+        return \
+            torch.cat(
+                (
+                    (media_movel_sinal + self.envelope_layer((torch.abs(signal - media_movel_sinal)) ** self.norm_order) ** (1.0 / self.norm_order)),
+                    (media_movel_sinal - self.envelope_layer((torch.abs(signal - media_movel_sinal)) ** self.norm_order) ** (1.0 / self.norm_order))
+                ),
+                dim=1)
 
 
 class ResBlock(nn.Module):
