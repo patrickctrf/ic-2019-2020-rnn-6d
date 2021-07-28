@@ -1,27 +1,16 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import hilbert, chirp
+import torch
+from pytorch_wavelets import DWT1DForward, DWT1DInverse  # or simply DWT1D, IDWT1D
+from src.models import SignalWavelet
 
-duration = 1.0
-fs = 400.0
-samples = int(fs * duration)
-t = np.arange(samples) / fs
+dwt = DWT1DForward(wave='db6', J=3)
+dwt = SignalWavelet()
+X = torch.randn(10, 5, 100)
+yl, yh = dwt(X)
+print(yl.shape)
+print(yh[0].shape)
+print(yh[1].shape)
+print(yh[2].shape)
+idwt = DWT1DInverse(wave='db6')
+x = idwt((yl, yh))
 
-signal = chirp(t, 20.0, t[-1], 100.0)
-signal *= (1.0 + 30 * t + 0.5 * np.sin(2.0 * np.pi * 3.0 * t))
-
-analytic_signal = hilbert(signal)
-amplitude_envelope = np.abs(analytic_signal)
-instantaneous_phase = np.unwrap(np.angle(analytic_signal))
-instantaneous_frequency = (np.diff(instantaneous_phase) / (2.0 * np.pi) * fs)
-
-fig, (ax0, ax1) = plt.subplots(nrows=2)
-ax0.plot(t, signal, label='signal')
-ax0.plot(t, amplitude_envelope, label='envelope')
-ax0.set_xlabel("time in seconds")
-ax0.legend()
-ax1.plot(t[1:], instantaneous_frequency)
-ax1.set_xlabel("time in seconds")
-ax1.set_ylim(0.0, 120.0)
-fig.tight_layout()
-plt.show()
+print(x)

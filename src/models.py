@@ -20,7 +20,24 @@ from ptk.utils.torch import axis_angle_into_rotation_matrix, axis_angle_into_qua
 
 # When importing every models from this module, make sure only models are
 # imported
-__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer", "IMUHandlerWithPreintegration", "PreintegrationModule", "EachSamplePreintegrationModule", "SignalEnvelope"]
+__all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
+           "IMUHandlerWithPreintegration", "PreintegrationModule",
+           "EachSamplePreintegrationModule", "SignalEnvelope", "SignalWavelet"]
+
+from src.pytorch_wavelets.dwt.transform1d import DWT1DForward
+
+
+class SignalWavelet(nn.Module):
+    def __init__(self, wave='db6', j=3):
+        super().__init__()
+        self.dwt = DWT1DForward(wave=wave, J=j)
+
+    def forward(self, X):
+        # conv1d-like: (N, C, L)
+        # X = torch.randn(10, 5, 100)
+
+        # yl, yh = dwt(X)
+        return self.dwt(X)
 
 
 class SignalEnvelope(nn.Module):
