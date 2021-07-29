@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from mydatasets import *
 from ptk import DataManager
-from ptk.utils.torch import axis_angle_into_rotation_matrix, axis_angle_into_quaternion, rotation_matrix_into_axis_angle
+from ptk.utils.torchtools import axis_angle_into_rotation_matrix, axis_angle_into_quaternion, rotation_matrix_into_axis_angle
 
 # When importing every models from this module, make sure only models are
 # imported
@@ -29,6 +29,13 @@ from src.pytorch_wavelets.dwt.transform1d import DWT1DForward
 
 class SignalWavelet(nn.Module):
     def __init__(self, wave='db6', j=3):
+        """
+    Discrete 1D Wavelet transform described in:
+    https://github.com/fbcotter/pytorch_wavelets
+
+        :param wave: Wavelet type.
+        :param j: Number of levels of decomposition.
+        """
         super().__init__()
         self.dwt = DWT1DForward(wave=wave, J=j)
 
@@ -42,13 +49,26 @@ class SignalWavelet(nn.Module):
 
 class SignalEnvelope(nn.Module):
     def __init__(self, n_channels=2, kernel_size_envelope=9, kernel_size_avg=20, norm_order=9):
+        """
+    Returns original signal, moving average, upper and lower envelope, respective.
+    For each channel, those metrics are calculated invidually.
+        :param n_channels: Number of input (and output) channels.
+        :param kernel_size_envelope: How many samples use to compute envelopes.
+        :param kernel_size_avg: How many samples from original signal to compute average mean.
+        :param norm_order: Number of norm order to apply when calculating envelope.
+        """
         super(SignalEnvelope, self).__init__()
 
         self.norm_order = norm_order
 
+        # Usaremos convolucoes 1D para calcular medias locais (media movel).
+        # Nao eh propriamente uma convolucao e seus parametros ficam congelados,
+        # mas eh uma layer que computa de forma rapida e direta o que queremos
+
         # garante que o kernel seja impar
         kernel_size = (kernel_size_envelope // 2) * 2 + 1
         self.envelope_layer = Conv1d(n_channels, n_channels, (kernel_size,), padding=(kernel_size // 2,), padding_mode="replicate", bias=False).requires_grad_(False)
+        # Os unicas sinapses valendo 1 serao aquelas que ligam o sinal de entrada ao seu respectivo envelope
         self.envelope_layer.weight[:, :, :] = torch.zeros(n_channels, n_channels, kernel_size, )
         for i in range(n_channels):
             self.envelope_layer.weight[i, i, :] = torch.ones(kernel_size, )
@@ -56,6 +76,7 @@ class SignalEnvelope(nn.Module):
         # garante que o kernel seja impar
         kernel_size = (kernel_size_avg // 2) * 2 + 1
         self.avg_layer = Conv1d(n_channels, n_channels, (kernel_size,), padding=(kernel_size // 2,), padding_mode="replicate", bias=False).requires_grad_(False)
+        # Os unicas sinapses valendo 1 serao aquelas que ligam o sinal de entrada a sua media movel
         self.avg_layer.weight[:, :, :] = torch.zeros(n_channels, n_channels, kernel_size, )
         for i in range(n_channels):
             self.avg_layer.weight[i, i, :] = torch.ones(kernel_size, ) / kernel_size
@@ -65,6 +86,8 @@ class SignalEnvelope(nn.Module):
         # tendencia central em nossa distribuicao, enquanto que a media
         # aritmetica seria apenas 1 numero constante, nao atendendo ao nosso
         # objetivo.
+        # Repare que a convolucaocalcula perfeitamente a media movel de cada
+        # canal, com os valores fixos que colocamos em seus weights.
         media_movel_sinal = self.avg_layer(signal)
 
         # cat(original_signal, media_movel, upper_envelope, lower_envelope)
@@ -72,6 +95,20 @@ class SignalEnvelope(nn.Module):
             torch.cat(
                 (
                     signal, media_movel_sinal,
+                    # Os envelopes sao basicamente uma media tirada sobre a
+                    # soma do ABSOLUTO de CADA desvio (o ponto atual menos a
+                    # media movel) com a propria curva de media movel.
+                    # A diferenca aqui eh que, ao inves de tiramos apenas a
+                    # media, elevamos cada desvio local a uma potencia
+                    # (norm_order), somamos os desvios locais, e tiramos a raiz
+                    # de MESMA ordem. Eh como se calculassemos o modulo ao inves
+                    # da media, pois da melhores resultados para o envelope.
+                    # Consideramos que da melhores resultados porque um modulo
+                    # de ordem infinita basicamente retorna o valor de seu
+                    # membro mais alto, ou seja, o retorno deste valor seria o
+                    # do pico ou vale mais extremo naquele ponto da curva,
+                    # garantindo que o envelope esteja sempre sobre a silhueta
+                    # da curva.
                     (media_movel_sinal + self.envelope_layer((torch.abs(signal - media_movel_sinal)) ** self.norm_order) ** (1.0 / self.norm_order)),
                     (media_movel_sinal - self.envelope_layer((torch.abs(signal - media_movel_sinal)) ** self.norm_order) ** (1.0 / self.norm_order))
                 ),
@@ -302,16 +339,9 @@ input sequence and returns the prediction for the final step.
 class LSTMReceivingWavelet(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, bidirectional=False):
         """
-This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
-receives sequences and returns the predcition at the end of each one.
-
-There is a fit() method to train this model according to the parameters given in
-the class initialization. It follows the sklearn header pattern.
-
-This is also an sklearn-like estimator and may be used with any sklearn method
-designed for classical estimators. But, when using GPU as PyTorch device, you
-CAN'T use multiple sklearn workers (n_jobs), beacuse it raises an serializtion
-error within CUDA.
+Receives a multi channel signal, calculate its envelopes, then calculate its
+wavelets and finally uses LSTMs to compress each Wavelet and original signal
+channel into an individual state representation.
 
         :param input_size: Input dimension size (how many features).
         :param hidden_layer_size: How many features there will be inside each LSTM.
@@ -345,6 +375,8 @@ error within CUDA.
         self.envelope = SignalEnvelope(input_size)
         self.wavelet = SignalWavelet()
 
+        # Each LSTM will compress the sequence of different sizes sequences
+        # into an individual state representation.
         self.lstm_imu = nn.LSTM(input_size, self.hidden_layer_size,
                                 batch_first=True, num_layers=self.n_lstm_units,
                                 bidirectional=bool(self.bidirectional),

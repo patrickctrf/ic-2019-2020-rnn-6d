@@ -58,7 +58,7 @@ envelope = envelope_layer(signal).numpy()
 
 fig, (ax0, ax1) = plt.subplots(nrows=2)
 ax0.plot(t, signal[0][0], label='signal')
-ax0.plot(t, envelope[0][0], label='envelope')
+ax0.plot(t, envelope[0][4], label='envelope')
 ax0.set_xlabel("time in seconds")
 ax0.legend()
 ax1.plot(t[1:], instantaneous_frequency)

@@ -13,7 +13,7 @@ from ptk import timeseries_split
 # Also avoiding to import the smae things this module imports
 __all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset"]
 
-from ptk.utils.numpy import find_nearest, quaternion_into_axis_angle, axis_angle_into_rotation_matrix, rotation_matrix_into_axis_angle, axis_angle_into_quaternion
+from ptk.utils.numpytools import find_nearest, quaternion_into_axis_angle, axis_angle_into_rotation_matrix, rotation_matrix_into_axis_angle, axis_angle_into_quaternion
 
 
 class PackingSequenceDataloader(object):
