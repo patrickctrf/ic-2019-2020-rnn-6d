@@ -403,7 +403,9 @@ channel into an individual state representation.
                                  dropout=0.5)
 
         self.dense_network = Sequential(
-            nn.Linear(self.num_directions * self.hidden_layer_size * 5, 16),
+            nn.Linear(self.num_directions * self.hidden_layer_size * 5, 32),
+            nn.PReLU(num_parameters=32, init=0.1),
+            nn.Linear(32, 16),
             nn.PReLU(num_parameters=16, init=0.1),
             nn.Linear(16, self.output_size)
         )
