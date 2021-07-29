@@ -67,10 +67,11 @@ class SignalEnvelope(nn.Module):
         # objetivo.
         media_movel_sinal = self.avg_layer(signal)
 
-        # cat(upper_envelope, lower_envelope)
+        # cat(original_signal, media_movel, upper_envelope, lower_envelope)
         return \
             torch.cat(
                 (
+                    signal, media_movel_sinal,
                     (media_movel_sinal + self.envelope_layer((torch.abs(signal - media_movel_sinal)) ** self.norm_order) ** (1.0 / self.norm_order)),
                     (media_movel_sinal - self.envelope_layer((torch.abs(signal - media_movel_sinal)) ** self.norm_order) ** (1.0 / self.norm_order))
                 ),
@@ -296,6 +297,119 @@ input sequence and returns the prediction for the final step.
         # All batch size, whatever sequence length, forward direction and
         # lstm output size (hidden size).
         return lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)
+
+
+class LSTMReceivingWavelet(nn.Module):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, bidirectional=False):
+        """
+This class implements the classical LSTM with 1 or more cells (stacked LSTM). It
+receives sequences and returns the predcition at the end of each one.
+
+There is a fit() method to train this model according to the parameters given in
+the class initialization. It follows the sklearn header pattern.
+
+This is also an sklearn-like estimator and may be used with any sklearn method
+designed for classical estimators. But, when using GPU as PyTorch device, you
+CAN'T use multiple sklearn workers (n_jobs), beacuse it raises an serializtion
+error within CUDA.
+
+        :param input_size: Input dimension size (how many features).
+        :param hidden_layer_size: How many features there will be inside each LSTM.
+        :param output_size: Output dimension size (how many features).
+        :param n_lstm_units: How many stacked LSTM cells (or units).
+        :param epochs: The number of epochs to train. The final model after
+        train will be the one with best VALIDATION loss, not necessarily the
+        model found after whole "epochs" number.
+        :param training_batch_size: Size of each mini-batch during training
+        process. If number os samples is not a multiple of
+        "training_batch_size", the final batch will just be smaller than the
+        others.
+        :param validation_percent: The percentage of samples reserved for
+        validation (cross validation) during training inside fit() method.
+        :param bidirectional: If the LSTM units will be bidirectional.
+        :param device: PyTorch device, such as torch.device("cpu") or
+        torch.device("cuda:0").
+        """
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_layer_size = hidden_layer_size
+        self.output_size = output_size
+        self.n_lstm_units = n_lstm_units
+        if bidirectional:
+            self.bidirectional = 1
+            self.num_directions = 2
+        else:
+            self.bidirectional = 0
+            self.num_directions = 1
+
+        self.envelope = SignalEnvelope(input_size)
+        self.wavelet = SignalWavelet()
+
+        self.lstm_imu = nn.LSTM(input_size, self.hidden_layer_size,
+                                batch_first=True, num_layers=self.n_lstm_units,
+                                bidirectional=bool(self.bidirectional),
+                                dropout=0.5)
+
+        self.lstm_yl = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                               batch_first=True, num_layers=self.n_lstm_units,
+                               bidirectional=bool(self.bidirectional),
+                               dropout=0.5)
+
+        self.lstm_yh_0 = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                                 batch_first=True, num_layers=self.n_lstm_units,
+                                 bidirectional=bool(self.bidirectional),
+                                 dropout=0.5)
+
+        self.lstm_yh_1 = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                                 batch_first=True, num_layers=self.n_lstm_units,
+                                 bidirectional=bool(self.bidirectional),
+                                 dropout=0.5)
+
+        self.lstm_yh_2 = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                                 batch_first=True, num_layers=self.n_lstm_units,
+                                 bidirectional=bool(self.bidirectional),
+                                 dropout=0.5)
+
+        self.dense_network = Sequential(
+            nn.Linear(self.num_directions * self.hidden_layer_size * 5, 16),
+            nn.PReLU(num_parameters=16, init=0.1),
+            nn.Linear(16, self.output_size)
+        )
+        # We train using multiple inputs (mini_batch), so we let this cell ready
+        # to be called.
+        # self.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
+        #                           torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+        self.hidden_cell_zeros = None
+
+        self.hidden_cell_output = None
+
+        return
+
+    def forward(self, input_seq):
+        """
+Classic forward method of every PyTorch model, as fast as possible. Receives an
+input sequence and returns the prediction for the final step.
+
+        :param input_seq: Input sequence of the time series.
+        :return: The prediction in the end of the series.
+        """
+
+        yl, yh = self.wavelet(self.envelope(input_seq.movedim(1, 2)))
+
+        # (seq_len, batch, input_size), mas pode inverter o
+        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        # lstm_imu_out, _ = self.lstm_imu(input_seq)
+        # lstm_yl_out, _ = self.lstm_yl(yl)
+        # lstm_yh_0_out, _ = self.lstm_yh_0(yh[0])
+        # lstm_yh_1_out, _ = self.lstm_yh_1(yh[1])
+        # lstm_yh_2_out, _ = self.lstm_yh_2(yh[2])
+
+        return torch.cat((self.lstm_imu(input_seq)[0][:, -1, :],
+                          self.lstm_yl(yl.movedim(1, 2))[0][:, -1, :],
+                          self.lstm_yh_0(yh[0].movedim(1, 2))[0][:, -1, :],
+                          self.lstm_yh_1(yh[1].movedim(1, 2))[0][:, -1, :],
+                          self.lstm_yh_2(yh[2].movedim(1, 2))[0][:, -1, :]),
+                         dim=1)
 
 
 class Conv1DFeatureExtractor(nn.Module):
@@ -563,11 +677,11 @@ error within CUDA.
         n_base_filters = 8
         n_output_features = 8
         self.feature_extractor = \
-            LSTMLatentFeatures(input_size=16,
-                               hidden_layer_size=hidden_layer_size,
-                               output_size=output_size,
-                               n_lstm_units=n_lstm_units,
-                               bidirectional=bidirectional)
+            LSTMReceivingWavelet(input_size=16,
+                                 hidden_layer_size=hidden_layer_size,
+                                 output_size=output_size,
+                                 n_lstm_units=n_lstm_units,
+                                 bidirectional=bidirectional)
 
         # self.feature_extractor = Conv1DFeatureExtractor(input_size=16,
         #                                                 output_size=output_size)
@@ -606,7 +720,7 @@ input sequence and returns the prediction for the final step.
         # # the reason of '[:,-1,:]'.
         # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
 
-        predictions = self.dense_network(output_seq[:, -1, :])
+        predictions = self.dense_network(output_seq)
 
         return predictions
 
