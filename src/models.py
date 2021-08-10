@@ -811,7 +811,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = nn.MSELoss()
+        if self.loss_function is None: self.loss_function = nn.L1Loss()
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
@@ -841,7 +841,7 @@ overflow the memory.
                     y_pred = self(X)
                     # O peso do batch no calculo da loss eh proporcional ao seu
                     # tamanho.
-                    single_loss = self.loss_function(y_pred, y) * X.shape[0]
+                    single_loss = self.loss_function(y_pred[:, :3], y[:, :3]) * X.shape[0]
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 scaler.scale(single_loss).backward()
                 scaler.step(self.optimizer)
@@ -876,7 +876,7 @@ overflow the memory.
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
-                        single_loss = self.loss_function(y_pred, y) * X.shape[0]
+                        single_loss = self.loss_function(y_pred[:, :3], y[:, :3]) * X.shape[0]
 
                     validation_loss += single_loss.detach()
 
