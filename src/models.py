@@ -24,7 +24,7 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
            "IMUHandlerWithPreintegration", "PreintegrationModule",
            "EachSamplePreintegrationModule", "SignalEnvelope", "SignalWavelet"]
 
-from src.pytorch_wavelets.dwt.transform1d import DWT1DForward
+from pytorch_wavelets.dwt.transform1d import DWT1DForward
 
 
 class SignalWavelet(nn.Module):
@@ -372,7 +372,7 @@ channel into an individual state representation.
             self.bidirectional = 0
             self.num_directions = 1
 
-        self.envelope = SignalEnvelope(input_size)
+        self.envelope = SignalEnvelope(n_channels=input_size, norm_order=5)
         self.wavelet = SignalWavelet()
 
         # Each LSTM will compress the sequence of different sizes sequences
@@ -772,19 +772,19 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.01))
+                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                   min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+                                                   min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False)
 
         room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=(0, 0.03))
+                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room6_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)

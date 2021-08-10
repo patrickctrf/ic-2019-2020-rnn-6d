@@ -5,7 +5,7 @@ from scipy.signal import hilbert, chirp
 from torch import tensor
 from torch.nn import Conv1d
 
-from src.models import SignalEnvelope
+from models import SignalEnvelope
 
 
 def moving_average(x, w):
