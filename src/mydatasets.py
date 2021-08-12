@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 from ptk import timeseries_split
+from ptk.utils.numpytools import hamilton_product
 
 # Specifying which modules to import when "import *" is called over this module.
 # Also avoiding to import the smae things this module imports
@@ -160,18 +161,18 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
                         # inverse of PREVIOUS orientation matrix must give us
                         # orientation variation.
                         np.matmul(
-                            # Current orientation matrix (from quaternion)
-                            axis_angle_into_rotation_matrix(
-                                *quaternion_into_axis_angle(
-                                    self.output_data[window_start_idx + window_size][3:]
-                                )
-                            ),
                             # inverse (r.transpose) matrix of previous quaternion
                             axis_angle_into_rotation_matrix(
                                 *quaternion_into_axis_angle(
                                     self.output_data[window_start_idx][3:]
                                 )
-                            ).T
+                            ).T,
+                            # Current orientation matrix (from quaternion)
+                            axis_angle_into_rotation_matrix(
+                                *quaternion_into_axis_angle(
+                                    self.output_data[window_start_idx + window_size][3:]
+                                )
+                            )
                         )
                     )
                 )
