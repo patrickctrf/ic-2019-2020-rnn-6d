@@ -25,7 +25,7 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
            "EachSamplePreintegrationModule", "SignalEnvelope", "SignalWavelet"]
 
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
-from losses import log_quadratic
+from losses import LogQuadraticLoss
 
 
 class SignalWavelet(nn.Module):
@@ -812,7 +812,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = log_quadratic
+        if self.loss_function is None: self.loss_function = LogQuadraticLoss(alpha=10)
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)

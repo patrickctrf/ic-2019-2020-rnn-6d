@@ -1,7 +1,14 @@
 import torch
 
-__all__ = ["log_quadratic"]
+__all__ = ["LogQuadraticLoss"]
+
+from torch import nn
 
 
-def log_quadratic(y_hat, y):
-    return torch.mean(torch.log(1 + ((100 * (y_hat - y)) ** 2)))
+class LogQuadraticLoss(nn.Module):
+    def __init__(self, alpha=10):
+        super().__init__()
+        self.alpha = alpha
+
+    def forward(self, y_hat, y):
+        return torch.mean(torch.log(1 + ((self.alpha * (y_hat - y)) ** 2)))
