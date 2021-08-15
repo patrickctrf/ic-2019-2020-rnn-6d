@@ -812,7 +812,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = LogQuadraticLoss(alpha=10)
+        if self.loss_function is None: self.loss_function = LogQuadraticLoss(alpha=1)
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
