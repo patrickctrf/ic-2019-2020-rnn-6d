@@ -839,7 +839,7 @@ overflow the memory.
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
-                    var = y_pred[:, self.output_size // 2:]
+                    var = torch.exp(y_pred[:, self.output_size // 2:])
                     y_pred = y_pred[:, :self.output_size // 2]
                     # O peso do batch no calculo da loss eh proporcional ao seu
                     # tamanho.
@@ -878,7 +878,7 @@ overflow the memory.
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
-                        var = y_pred[:, self.output_size // 2:]
+                        var = torch.exp(y_pred[:, self.output_size // 2:])
                         y_pred = y_pred[:, :self.output_size // 2]
                         single_loss = self.loss_function(y_pred, y, var) * X.shape[0]
 
