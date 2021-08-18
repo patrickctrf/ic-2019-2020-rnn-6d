@@ -9,7 +9,7 @@ from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from torch import nn, movedim, absolute, tensor
 from torch.cuda.amp import autocast, GradScaler
-from torch.nn import Sequential, Conv1d
+from torch.nn import Sequential, Conv1d, GaussianNLLLoss
 from torch.optim import lr_scheduler
 from torch.utils.data import Subset
 from tqdm import tqdm
@@ -25,7 +25,6 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
            "EachSamplePreintegrationModule", "SignalEnvelope", "SignalWavelet"]
 
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
-from losses import LogQuadraticLoss
 
 
 class SignalWavelet(nn.Module):
@@ -812,7 +811,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = LogQuadraticLoss(alpha=1)
+        if self.loss_function is None: self.loss_function = GaussianNLLLoss()
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
@@ -840,9 +839,11 @@ overflow the memory.
 
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
+                    var = y_pred[:, self.output_size / 2:]
+                    y_pred = y_pred[:, :self.output_size / 2]
                     # O peso do batch no calculo da loss eh proporcional ao seu
                     # tamanho.
-                    single_loss = self.loss_function(y_pred[:, :3], y[:, :3]) * X.shape[0]
+                    single_loss = self.loss_function(y_pred, y, var) * X.shape[0]
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 scaler.scale(single_loss).backward()
                 scaler.step(self.optimizer)
@@ -877,7 +878,9 @@ overflow the memory.
 
                     with autocast(enabled=self.use_amp):
                         y_pred = self(X)
-                        single_loss = self.loss_function(y_pred[:, :3], y[:, :3]) * X.shape[0]
+                        var = y_pred[:, self.output_size / 2:]
+                        y_pred = y_pred[:, :self.output_size / 2]
+                        single_loss = self.loss_function(y_pred, y, var) * X.shape[0]
 
                     validation_loss += single_loss.detach()
 
