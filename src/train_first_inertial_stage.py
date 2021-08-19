@@ -65,9 +65,12 @@ Runs the experiment itself.
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
 
+    euroc_v2_dataset = AsymetricalTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/vicon0/data.csv",
+                                                    min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
+
     predict = []
     reference = []
-    for i, (x, y) in tqdm(enumerate(room2_tum_dataset), total=len(room2_tum_dataset)):
+    for i, (x, y) in tqdm(enumerate(euroc_v2_dataset), total=len(euroc_v2_dataset)):
         y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
         predict.append(y_hat.detach().cpu().numpy())
         reference.append(y.detach().cpu().numpy())
