@@ -802,11 +802,8 @@ overflow the memory.
         train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = euroc_v2_dataset
-        val_dataset = euroc_v1_dataset
-
-        # train_dataset = room3_tum_dataset
-        # val_dataset = room4_tum_dataset
+        train_dataset = euroc_v1_dataset
+        val_dataset = room3_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
