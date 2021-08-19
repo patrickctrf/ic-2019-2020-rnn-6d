@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import torch
 from pandas import read_csv
@@ -9,10 +11,11 @@ from tqdm import tqdm
 
 from ptk import timeseries_split
 from ptk.utils.numpytools import hamilton_product
+from multiprocessing.dummy import Pool as ThreadPool
 
 # Specifying which modules to import when "import *" is called over this module.
 # Also avoiding to import the smae things this module imports
-__all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset"]
+__all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset", "ParallelBatchTimeseriesDataset"]
 
 from ptk.utils.numpytools import find_nearest, quaternion_into_axis_angle, axis_angle_into_rotation_matrix, rotation_matrix_into_axis_angle, axis_angle_into_quaternion
 
@@ -315,6 +318,111 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             cat([self.base_dataset[dataset_element_idx][1].unsqueeze(0)
                  for dataset_element_idx
                  in self.lista_de_arrays_com_mesmo_comprimento[idx]], 0)
+
+        return x_batch, y_batch
+
+    def __len__(self):
+        return self.length
+
+
+def load_data_for_parallel_dataset(base_dataset, array_idx):
+    return base_dataset[array_idx][0].unsqueeze(0), base_dataset[array_idx][1].unsqueeze(0)
+
+
+class ParallelBatchTimeseriesDataset(Dataset):
+    def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1, noise=None,
+                 reference_x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", reference_y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
+                 n_threads=10):
+        super().__init__()
+        self.batch_size = batch_size
+        self.n_threads = n_threads
+
+        self.base_dataset = \
+            AsymetricalTimeseriesDataset(x_csv_path=x_csv_path,
+                                         y_csv_path=y_csv_path,
+                                         max_window_size=max_window_size,
+                                         min_window_size=min_window_size,
+                                         convert_first=True,
+                                         device=torch.device("cpu"),
+                                         shuffle=False,
+                                         noise=noise,
+                                         reference_x_csv_path=reference_x_csv_path,
+                                         reference_y_csv_path=reference_y_csv_path)
+
+        try:
+            tabela = np.load(str(max_window_size) + str(min_window_size) +
+                             str(x_csv_path).replace("/", "_").replace(".", "_") +
+                             "_tabela_elementos_dataset.npy")
+
+        except FileNotFoundError as e:
+            print("Indexing dataset samples:")
+            tabela = np.zeros((len(self.base_dataset),))
+            i = 0
+            for element in tqdm(self.base_dataset):
+                tabela[i] = element[0].shape[0]
+                i = i + 1
+            np.save(str(max_window_size) + str(min_window_size) +
+                    str(x_csv_path).replace("/", "_").replace(".", "_") +
+                    "_tabela_elementos_dataset.npy", tabela)
+
+        # dict_count = Counter(tabela)
+        # ocorrencias = array(list(dict_count.values()))
+
+        # Os arrays nesta lista contem INDICES para elementos do dataset com
+        # mesmo comprimento.
+        self.lista_de_arrays_com_mesmo_comprimento = []
+
+        print("Loading sample info...")
+        # grupos de arrays com mesmo comprimento.
+        # Eles serao separados em batches, entao alguns
+        # batches sao de arrays com mesmo comprimento que outros. Alguns
+        # batches serao um pouco maiores, pois a quantidade de elementos com o
+        # mesmo tamanho talvez nao seja um multiplo inteiro do batch_size
+        # escolhido
+        for i in tqdm(range(tabela.min().astype("int"), tabela.max().astype("int") + 1)):
+            if np.where(tabela == i)[0].shape[0] // self.batch_size + (np.where(tabela == i)[0].shape[0] % self.batch_size > 0) <= 1:
+                # Se nao houver nenhuma sample daquele tamanho, pule a iteracao
+                # Se houver so 1 sample, pularemos tambem, porque a Batchnorm
+                # buga e um batch com so 1 sample eh instavel demais
+                pass
+            else:
+                self.lista_de_arrays_com_mesmo_comprimento.extend(
+                    np.array_split(np.where(tabela == i)[0],
+                                   np.where(tabela == i)[0].shape[0] // self.batch_size + (np.where(tabela == i)[0].shape[0] % self.batch_size > 0))
+                )
+
+        self.length = len(self.lista_de_arrays_com_mesmo_comprimento)
+
+        self.shuffle_array = np.arange(self.length)
+
+        if shuffle is True:
+            np.random.shuffle(self.shuffle_array)
+
+        return
+
+    def __getitem__(self, idx):
+        """
+Get itens from dataset according to idx passed. The return is in numpy arrays.
+
+        :param idx: Index to return.
+        :return: 2 elements (batches), according to idx.
+        """
+
+        # If we are shuffling indices, we do it here. Else, we'll just get the
+        # same index back
+        idx = self.shuffle_array[idx]
+
+        pool = ThreadPool(self.n_threads)
+        dataset_elements = pool.starmap(load_data_for_parallel_dataset,
+                                        zip(itertools.repeat(self.base_dataset),
+                                            self.lista_de_arrays_com_mesmo_comprimento[idx])
+                                        )
+
+        x_list, y_list = list(zip(*dataset_elements))
+
+        # concatenate tensor in order to assemble batches
+        x_batch = cat(x_list, 0)
+        y_batch = cat(y_list, 0)
 
         return x_batch, y_batch
 

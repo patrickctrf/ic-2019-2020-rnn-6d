@@ -25,6 +25,7 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
            "EachSamplePreintegrationModule", "SignalEnvelope", "SignalWavelet"]
 
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
+from mydatasets import ParallelBatchTimeseriesDataset
 
 
 class SignalWavelet(nn.Module):
@@ -771,29 +772,29 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        euroc_v1_dataset = BatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/vicon0/data.csv",
-                                                  min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        euroc_v1_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/vicon0/data.csv", n_threads=2,
+                                                          min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        euroc_v2_dataset = BatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/vicon0/data.csv",
-                                                  min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        euroc_v2_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/vicon0/data.csv", n_threads=2,
+                                                          min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
+                                                           min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        room2_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+        room2_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+                                                           min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
-        room3_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        room3_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv",
+                                                           min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        room4_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False)
+        room4_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv",
+                                                           min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False)
 
-        room5_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        room5_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv",
+                                                           min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        room6_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv",
-                                                   min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
+        room6_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv",
+                                                           min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
@@ -803,6 +804,9 @@ overflow the memory.
 
         train_dataset = euroc_v1_dataset
         val_dataset = euroc_v2_dataset
+
+        train_dataset = room3_tum_dataset
+        val_dataset = room4_tum_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
