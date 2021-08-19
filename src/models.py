@@ -771,6 +771,12 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
+        euroc_v1_dataset = BatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/vicon0/data.csv",
+                                                  min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_v2_dataset = BatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/vicon0/data.csv",
+                                                  min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
         room1_tum_dataset = BatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
@@ -795,8 +801,8 @@ overflow the memory.
         train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = room3_tum_dataset
-        val_dataset = room4_tum_dataset
+        train_dataset = euroc_v1_dataset
+        val_dataset = euroc_v2_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
