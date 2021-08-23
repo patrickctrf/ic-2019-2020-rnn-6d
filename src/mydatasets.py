@@ -1,4 +1,5 @@
 import itertools
+from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 import torch
@@ -10,8 +11,6 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 from ptk import timeseries_split
-from ptk.utils.numpytools import hamilton_product
-from multiprocessing.dummy import Pool as ThreadPool
 
 # Specifying which modules to import when "import *" is called over this module.
 # Also avoiding to import the smae things this module imports

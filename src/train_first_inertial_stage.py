@@ -21,7 +21,7 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True,
+    model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=True,
                            output_size=7 * 2, training_batch_size=4096, epochs=50, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
@@ -32,29 +32,6 @@ Runs the experiment itself.
     # model.load_feature_extractor()
 
     model.to(device)
-
-    # Gera os parametros de entrada aleatoriamente.
-    hidden_layer_size = random.uniform(40, 80, 20).astype("int")
-    n_lstm_units = arange(1, 4)
-
-    # Une os parametros de entrada em um unico dicionario a ser passado para a
-    # funcao.
-    parametros = {'hidden_layer_size': hidden_layer_size, 'n_lstm_units': n_lstm_units}
-
-    splitter = TimeSeriesSplitCV(n_splits=2,
-                                 training_percent=0.8,
-                                 blocking_split=False)
-    regressor = model
-    # cv_search = \
-    #     BayesSearchCV(estimator=regressor, cv=splitter,
-    #                   search_spaces=parametros,
-    #                   refit=True,
-    #                   n_iter=4,
-    #                   verbose=1,
-    #                   # n_jobs=4,
-    #                   scoring=make_scorer(mean_squared_error,
-    #                                       greater_is_better=False,
-    #                                       needs_proba=False))
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
