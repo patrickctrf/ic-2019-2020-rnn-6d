@@ -832,7 +832,7 @@ overflow the memory.
 
         train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
                                        euroc_mh1_dataset, euroc_mh5_dataset,
-                                       euroc_v2_03_dataset])
+                                       euroc_v2_03_dataset, euroc_mh4_dataset])
         val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
