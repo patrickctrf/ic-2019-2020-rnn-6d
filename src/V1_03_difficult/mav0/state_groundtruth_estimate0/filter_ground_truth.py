@@ -7,4 +7,4 @@ df = df[['#timestamp', ' p_RS_R_x [m]', ' p_RS_R_y [m]', ' p_RS_R_z [m]',
 
 print(df.head())
 
-df.to_csv("data.csv")
+df.to_csv("data.csv", index=False)
