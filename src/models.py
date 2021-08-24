@@ -504,11 +504,11 @@ error within CUDA.
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(3 * n_base_filters),
                 nn.Dropout2d(p=0.5),
                 # Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.00),  # nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters),  # nn.BatchNorm1d(3 * n_base_filters),
                 SqueezeAndExcitationBlock1D(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.00),  # nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters),  # nn.BatchNorm1d(2 * n_base_filters),
                 SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.00),  # nn.BatchNorm1d(n_output_features),
+                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features),  # nn.BatchNorm1d(n_output_features),
                 SqueezeAndExcitationBlock1D(n_output_features)
             )
 
@@ -516,9 +516,9 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.00),
+            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16),
             # nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
-            nn.Linear(16, 16), nn.PReLU(num_parameters=16, init=0.00),
+            nn.Linear(16, 16), nn.PReLU(num_parameters=16),
             # nn.BatchNorm1d(16, affine=True),
             nn.Linear(16, self.output_size)
         )
@@ -775,6 +775,7 @@ overflow the memory.
         euroc_v1_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
                                                              min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
+        # Esse daqui gera NAN no treino e na validacao, melhor nao usar
         euroc_v2_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
                                                              min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
@@ -789,6 +790,21 @@ overflow the memory.
 
         euroc_v1_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_03_difficult/mav0/imu0/data.csv", y_csv_path="V1_03_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
                                                              min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_mh1_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_01_easy/mav0/imu0/data.csv", y_csv_path="MH_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_mh2_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_02_easy/mav0/imu0/data.csv", y_csv_path="MH_02_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_mh3_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_03_medium/mav0/imu0/data.csv", y_csv_path="MH_03_medium/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_mh4_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_04_difficult/mav0/imu0/data.csv", y_csv_path="MH_04_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_mh5_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_05_difficult/mav0/imu0/data.csv", y_csv_path="MH_05_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         # room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv", n_threads=10,
         #                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
@@ -815,9 +831,9 @@ overflow the memory.
         # val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
         train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
-                                       euroc_v1_03_dataset, euroc_v2_01_dataset,
+                                       euroc_mh1_dataset, euroc_mh5_dataset,
                                        euroc_v2_03_dataset])
-        val_dataset = euroc_v2_02_dataset
+        val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
