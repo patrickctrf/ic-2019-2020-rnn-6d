@@ -503,12 +503,12 @@ error within CUDA.
                 nn.Dropout2d(p=0.5),
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(3 * n_base_filters),
                 nn.Dropout2d(p=0.5),
-                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(4 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.01),  # nn.BatchNorm1d(3 * n_base_filters),
+                # Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
+                Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters, init=0.00),  # nn.BatchNorm1d(3 * n_base_filters),
                 SqueezeAndExcitationBlock1D(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.01),  # nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters, init=0.00),  # nn.BatchNorm1d(2 * n_base_filters),
                 SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.01),  # nn.BatchNorm1d(n_output_features),
+                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features, init=0.00),  # nn.BatchNorm1d(n_output_features),
                 SqueezeAndExcitationBlock1D(n_output_features)
             )
 
@@ -516,9 +516,9 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.01),
+            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16, init=0.00),
             # nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
-            nn.Linear(16, 16), nn.PReLU(num_parameters=16, init=0.01),
+            nn.Linear(16, 16), nn.PReLU(num_parameters=16, init=0.00),
             # nn.BatchNorm1d(16, affine=True),
             nn.Linear(16, self.output_size)
         )
