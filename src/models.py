@@ -739,23 +739,23 @@ input sequence and returns the prediction for the final step.
 
         input_seq = self.preintegration_module(input_seq)
 
-        # # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # # # convolucao e precisam vir no meio para o pytorch
-        # # input_seq = movedim(input_seq, -2, -1)
-        # #
-        # output_seq = self.feature_extractor(input_seq)
+        # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # # convolucao e precisam vir no meio para o pytorch
+        # input_seq = movedim(input_seq, -2, -1)
         #
-        # predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
-
         output_seq = self.feature_extractor(input_seq)
 
-        # # All batch size, whatever sequence length, forward direction and
-        # # lstm output size (hidden size).
-        # # We only want the last output of lstm (end of sequence), that is
-        # # the reason of '[:,-1,:]'.
-        # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
 
-        predictions = self.dense_network(output_seq)
+        # output_seq = self.feature_extractor(input_seq)
+        #
+        # # # All batch size, whatever sequence length, forward direction and
+        # # # lstm output size (hidden size).
+        # # # We only want the last output of lstm (end of sequence), that is
+        # # # the reason of '[:,-1,:]'.
+        # # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        #
+        # predictions = self.dense_network(output_seq)
 
         return predictions
 
@@ -790,29 +790,29 @@ overflow the memory.
         euroc_v1_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_03_difficult/mav0/imu0/data.csv", y_csv_path="V1_03_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
                                                              min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
-
-        room2_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
-
-        room3_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
-
-        room4_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False)
-
-        room5_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=None)
-
-        room6_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
+        # room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv", n_threads=10,
+        #                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        #
+        # room2_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", n_threads=10,
+        #                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
+        #
+        # room3_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv", n_threads=10,
+        #                                                    min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        #
+        # room4_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv", n_threads=10,
+        #                                                    min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False)
+        #
+        # room5_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv", n_threads=10,
+        #                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        #
+        # room6_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room6_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room6_512_16/mav0/mocap0/data.csv", n_threads=10,
+        #                                                    min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False)
 
         # # Diminuir o dataset para verificar o funcionamento de scripts
         # room1_tum_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * 0.001)))
 
-        train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
-        val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
+        # train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
+        # val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
         train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
                                        euroc_v1_03_dataset, euroc_v2_01_dataset,
