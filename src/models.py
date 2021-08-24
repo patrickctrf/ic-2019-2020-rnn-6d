@@ -718,8 +718,8 @@ error within CUDA.
                                  n_lstm_units=n_lstm_units,
                                  bidirectional=bidirectional)
 
-        # self.feature_extractor = Conv1DFeatureExtractor(input_size=16,
-        #                                                 output_size=output_size)
+        self.feature_extractor = Conv1DFeatureExtractor(input_size=16,
+                                                        output_size=output_size)
 
         # Assim nao precisamos adaptar a rede densa a uma saida de CNN ou LSTM,
         # ja pegamos a rede adaptada do proprio extrator de
@@ -773,22 +773,22 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         euroc_v1_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
-                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v2_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
-                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v2_02_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_02_medium/mav0/imu0/data.csv", y_csv_path="V2_02_medium/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
-                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v2_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_03_difficult/mav0/imu0/data.csv", y_csv_path="V2_03_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
-                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v1_02_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_02_medium/mav0/imu0/data.csv", y_csv_path="V1_02_medium/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
-                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v1_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_03_difficult/mav0/imu0/data.csv", y_csv_path="V1_03_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
-                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv", n_threads=10,
                                                            min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
@@ -797,10 +797,10 @@ overflow the memory.
                                                            min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False)
 
         room3_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room3_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room3_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room4_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room4_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room4_512_16/mav0/mocap0/data.csv", n_threads=10,
-                                                           min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False)
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False)
 
         room5_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room5_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room5_512_16/mav0/mocap0/data.csv", n_threads=10,
                                                            min_window_size=150, max_window_size=200, batch_size=self.training_batch_size, shuffle=False, noise=None)
