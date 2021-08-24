@@ -11,7 +11,7 @@ from torch import nn, movedim, absolute, tensor
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn import Sequential, Conv1d, GaussianNLLLoss
 from torch.optim import lr_scheduler
-from torch.utils.data import Subset
+from torch.utils.data import Subset, ConcatDataset
 from tqdm import tqdm
 
 from mydatasets import *
@@ -772,11 +772,23 @@ overflow the memory.
         self.packing_sequence = True
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
-        euroc_v1_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/vicon0/data.csv", n_threads=10,
-                                                          min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        euroc_v1_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
-        euroc_v2_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/vicon0/data.csv", n_threads=10,
-                                                          min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+        euroc_v2_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_v2_02_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_02_easy/mav0/imu0/data.csv", y_csv_path="V2_02_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_v2_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_03_easy/mav0/imu0/data.csv", y_csv_path="V2_03_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_v1_02_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_02_easy/mav0/imu0/data.csv", y_csv_path="V1_02_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
+
+        euroc_v1_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_03_easy/mav0/imu0/data.csv", y_csv_path="V1_03_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=10,
+                                                             min_window_size=20, max_window_size=40, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv", n_threads=10,
                                                            min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
@@ -802,8 +814,10 @@ overflow the memory.
         train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = euroc_v1_dataset
-        val_dataset = room3_tum_dataset
+        train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
+                                       euroc_v1_03_dataset, euroc_v2_01_dataset,
+                                       euroc_v2_03_dataset])
+        val_dataset = euroc_v2_02_dataset
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True)
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True)
