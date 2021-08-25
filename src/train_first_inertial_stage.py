@@ -1,6 +1,8 @@
+import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from numpy import arange, random, array
+from pandas import read_csv
 from tqdm import tqdm
 
 from mydatasets import *
@@ -25,6 +27,7 @@ Runs the experiment itself.
                            output_size=7 * 2, training_batch_size=4096, epochs=50, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
+    # model = torch.load("best_model.pth")
 
     # model = PreintegrationModule(device=device)
 
@@ -62,6 +65,29 @@ Runs the experiment itself.
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.savefig(dim_name + ".png", dpi=200)
         plt.show()
+
+    # dados_de_entrada_imu = read_csv("V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 1:]
+    # dados_de_saida = read_csv("V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
+    #
+    # predict = []
+    # for i in tqdm(range(0, dados_de_entrada_imu.shape[0] - 30, 30)):
+    #     predict.append(
+    #         model(
+    #             torch.tensor(dados_de_entrada_imu[i:i + 30].reshape(-1, 30, 6), device=device, dtype=torch.float)
+    #         )
+    #     )
+    #
+    # predict = torch.cat(predict).detach().cpu().numpy()
+    # predict = np.cumsum(predict, axis=0)
+    #
+    # dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
+    # for i, dim_name in enumerate(dimensoes):
+    #     plt.close()
+    #     plt.plot(range(0, dados_de_saida.shape[0], dados_de_saida.shape[0] // predict.shape[0])[:predict.shape[0]], predict[:, i])
+    #     plt.plot(range(dados_de_saida.shape[0]), dados_de_saida[:, i])
+    #     plt.legend(['predict', 'reference'], loc='upper right')
+    #     plt.savefig(dim_name + ".png", dpi=200)
+    #     plt.show()
 
     # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 

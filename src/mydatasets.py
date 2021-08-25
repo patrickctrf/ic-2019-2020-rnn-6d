@@ -1,5 +1,5 @@
 import itertools
-from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool as ThreadPool
 
 import numpy as np
 import torch
