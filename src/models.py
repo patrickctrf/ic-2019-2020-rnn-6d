@@ -9,7 +9,7 @@ from skimage.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from torch import nn, movedim, absolute, tensor
 from torch.cuda.amp import autocast, GradScaler
-from torch.nn import Sequential, Conv1d, GaussianNLLLoss
+from torch.nn import Sequential, Conv1d, GaussianNLLLoss, MSELoss
 from torch.optim import lr_scheduler
 from torch.utils.data import Subset, ConcatDataset
 from tqdm import tqdm
@@ -26,6 +26,7 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
 
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
 from mydatasets import ParallelBatchTimeseriesDataset
+from losses import UncertainizedPowerLoss
 
 
 class SignalWavelet(nn.Module):
@@ -848,7 +849,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = GaussianNLLLoss()
+        if self.loss_function is None: self.loss_function = UncertainizedPowerLoss()
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, weight_decay=0.0)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
