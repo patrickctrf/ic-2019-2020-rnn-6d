@@ -324,7 +324,7 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
         return self.length
 
 
-def load_data_for_parallel_dataset(base_dataset, array_idx):
+def _load_data_for_parallel_dataset(base_dataset, array_idx):
     return base_dataset[array_idx][0].unsqueeze(0), base_dataset[array_idx][1].unsqueeze(0)
 
 
@@ -337,7 +337,6 @@ class ParallelBatchTimeseriesDataset(Dataset):
 
         # Thread pool assembles batches
         self.n_threads = n_threads
-        self.pool = ThreadPool(self.n_threads)
 
         self.base_dataset = \
             AsymetricalTimeseriesDataset(x_csv_path=x_csv_path,
@@ -414,7 +413,8 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
         # same index back
         idx = self.shuffle_array[idx]
 
-        dataset_elements = self.pool.starmap(load_data_for_parallel_dataset,
+        self.pool = ThreadPool(self.n_threads)
+        dataset_elements = self.pool.starmap(_load_data_for_parallel_dataset,
                                              zip(itertools.repeat(self.base_dataset),
                                                  self.lista_de_arrays_com_mesmo_comprimento[idx])
                                              )
