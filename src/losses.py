@@ -15,13 +15,11 @@ class LogQuadraticLoss(nn.Module):
 
 
 class UncertainizedPowerLoss(nn.Module):
-    def __init__(self, alpha=10, degree=2):
+    def __init__(self, alpha=100, degree=2):
         super().__init__()
         self.alpha = alpha
         self.degree = degree
 
     def forward(self, y_hat, y, var):
-        return 1 / 2 * torch.mean(
-            (torch.log(var + 1e-6) +
-             ((self.alpha * (y_hat - y)) ** self.degree) / (var + 1e-6))
-        )
+        return 1 / 2 * torch.mean(torch.log(var + 1e-6)) + \
+               self.alpha / 2 * torch.mean(((y_hat - y) ** self.degree) / (var + 1e-6))

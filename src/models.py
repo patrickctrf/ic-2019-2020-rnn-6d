@@ -836,8 +836,8 @@ overflow the memory.
                                        euroc_v2_03_dataset, euroc_mh4_dataset])
         val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
-        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=2, multiprocessing_context='spawn')
-        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=2, multiprocessing_context='spawn')
+        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=5, multiprocessing_context='spawn')
+        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=5, multiprocessing_context='spawn')
 
         # Pesos das saídas: px py pz wq wx wy wz (translacoes e quaternios).
         weights = array([1000, 1000, 1000, 1, 1, 1, 1])
