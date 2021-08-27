@@ -881,7 +881,7 @@ overflow the memory.
                     y_pred = y_pred[:, :self.output_size // 2]
                     # O peso do batch no calculo da loss eh proporcional ao seu
                     # tamanho.
-                    single_loss = self.loss_function(y_pred, y, var) * X.shape[0]
+                    single_loss = self.loss_function(y_pred, y, var)  # * X.shape[0]
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 scaler.scale(single_loss).backward()
                 scaler.step(self.optimizer)
@@ -898,7 +898,7 @@ overflow the memory.
                 ponderar_losses += X.shape[0]
 
             # Tira a media ponderada das losses.
-            training_loss = training_loss / ponderar_losses
+            training_loss = training_loss  # / ponderar_losses
 
             ponderar_losses = 0.0
 
@@ -918,14 +918,14 @@ overflow the memory.
                         y_pred = self(X)
                         var = torch.exp(y_pred[:, self.output_size // 2:])
                         y_pred = y_pred[:, :self.output_size // 2]
-                        single_loss = self.loss_function(y_pred, y, var) * X.shape[0]
+                        single_loss = self.loss_function(y_pred, y, var)  # * X.shape[0]
 
                     validation_loss += single_loss.detach()
 
                     ponderar_losses += X.shape[0]
 
             # Tira a media ponderada das losses.
-            validation_loss = validation_loss / ponderar_losses
+            validation_loss = validation_loss  # / ponderar_losses
 
             # Run learning rate scheduler
             scheduler.step(validation_loss)
