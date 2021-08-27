@@ -26,7 +26,7 @@ __all__ = ["InertialModule", "IMUHandler", "ResBlock", "SumLayer",
 
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
 from mydatasets import ParallelBatchTimeseriesDataset
-from losses import UncertainizedPowerLoss
+from losses import *
 
 
 class SignalWavelet(nn.Module):
@@ -849,8 +849,8 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = GaussianNLLLoss()
-        if self.optimizer is None: self.optimizer = torch.optim.SGD(self.parameters(), lr=0.1, momentum=0.9, nesterov=True)
+        if self.loss_function is None: self.loss_function = PosAndAngleLoss()
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.1)
 
@@ -881,7 +881,7 @@ overflow the memory.
                     y_pred = y_pred[:, :self.output_size // 2]
                     # O peso do batch no calculo da loss eh proporcional ao seu
                     # tamanho.
-                    single_loss = self.loss_function(y_pred, y, var) * X.shape[0] / 1e9
+                    single_loss = self.loss_function(y_pred, y, var) * X.shape[0] / 1e6
                 # Cada chamada ao backprop eh ACUMULADA no gradiente (optimizer)
                 scaler.scale(single_loss).backward()
                 scaler.step(self.optimizer)
@@ -895,7 +895,7 @@ overflow the memory.
                 # otherwise we woul get an explosive and incorrect loss value.
                 training_loss += single_loss.detach()
 
-                ponderar_losses += X.shape[0] / 1e9
+                ponderar_losses += X.shape[0] / 1e6
 
             # Tira a media ponderada das losses.
             training_loss = training_loss / ponderar_losses
@@ -918,11 +918,11 @@ overflow the memory.
                         y_pred = self(X)
                         var = torch.exp(y_pred[:, self.output_size // 2:])
                         y_pred = y_pred[:, :self.output_size // 2]
-                        single_loss = self.loss_function(y_pred, y, var) * X.shape[0] / 1e9
+                        single_loss = self.loss_function(y_pred, y, var) * X.shape[0] / 1e6
 
                     validation_loss += single_loss.detach()
 
-                    ponderar_losses += X.shape[0] / 1e9
+                    ponderar_losses += X.shape[0] / 1e6
 
             # Tira a media ponderada das losses.
             validation_loss = validation_loss / ponderar_losses
