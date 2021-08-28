@@ -3,7 +3,7 @@ import torch
 __all__ = ["LogQuadraticLoss", "UncertainizedPowerLoss", "PosAndAngleLoss"]
 
 from torch import nn
-from torch.nn import GaussianNLLLoss, CosineSimilarity, MSELoss
+from torch.nn import GaussianNLLLoss, CosineSimilarity, MSELoss, L1Loss
 
 
 class LogQuadraticLoss(nn.Module):
@@ -36,7 +36,7 @@ class PosAndAngleLoss(nn.Module):
         super().__init__()
         self.alpha = alpha
         self.degree = degree
-        self.translational_metric = MSELoss()
+        self.translational_metric = L1Loss()
         self.angular_metric = CosineSimilarity(dim=1)
 
     def forward(self, y_hat, y, var):  # , var[:, 0:3]) \
