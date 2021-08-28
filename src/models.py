@@ -850,9 +850,10 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = PosAndAngleLoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05, )  # momentum=0.9, nesterov=True)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
-        scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.1)
+        # scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.1)
+        scheduler = lr_scheduler.OneCycleLR(self.optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, final_div_factor=1e3)
 
         f = open("loss_log.csv", "w")
         w = csv.writer(f)
@@ -901,6 +902,9 @@ overflow the memory.
 
                 ponderar_losses += X.shape[0] / 1e6
 
+                # Run lr_scheduler OneCycleLr
+                scheduler.step()
+
                 # print("t operando python: ", '{:f}'.format(time.time() - t))
                 # t = time.time()
 
@@ -934,8 +938,8 @@ overflow the memory.
             # Tira a media ponderada das losses.
             validation_loss = validation_loss / ponderar_losses
 
-            # Run learning rate scheduler
-            scheduler.step(validation_loss)
+            # # Run learning rate scheduler. ReduceOnPlateau
+            # scheduler.step(validation_loss)
 
             # Checkpoint to best models found.
             if best_validation_loss > validation_loss:
