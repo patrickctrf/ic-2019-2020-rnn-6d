@@ -40,7 +40,9 @@ Runs the experiment itself.
     # model.fit(X, y)
     model.fit()
 
+    model.load_state_dict(torch.load("best_model_state_dict.pth"))
     model.eval()
+    model.to(torch.device("cpu"))
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
