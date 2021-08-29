@@ -10,7 +10,7 @@ from ptk.timeseries import *
 from models import *
 
 
-def experiment():
+def experiment(device):
     """
 Runs the experiment itself.
 
@@ -24,7 +24,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=False,
-                           output_size=7 * 2, training_batch_size=512, epochs=50, device=device, validation_percent=0.2)
+                           output_size=7 * 2, training_batch_size=64, epochs=50, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
     # model = torch.load("best_model.pth")
@@ -38,16 +38,20 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    model.fit()
+    # model.fit()
 
-    model.load_state_dict(torch.load("best_model_state_dict.pth"))
-    model.eval()
-    model.to(torch.device("cpu"))
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
+    device = torch.device("cpu")
+    model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=False,
+                           output_size=7 * 2, training_batch_size=512, epochs=50, device=device, validation_percent=0.2)
+    # model.load_state_dict(torch.load("best_model_state_dict.pth"))
+    model.eval()
+    model.to(device)
+
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
 
-    euroc_v2_dataset = AsymetricalTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/vicon0/data.csv",
+    euroc_v2_dataset = AsymetricalTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/state_groundtruth_estimate0/data.csv",
                                                     min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
 
     predict = []
@@ -110,4 +114,4 @@ if __name__ == '__main__':
         print("Usando CPU")
     device = torch.device(dev)
 
-    experiment()
+    experiment(device=device)
