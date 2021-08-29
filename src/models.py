@@ -774,38 +774,38 @@ overflow the memory.
         self.to(self.device)
         # =====DATA-PREPARATION=================================================
         euroc_v1_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_01_easy/mav0/imu0/data.csv", y_csv_path="V1_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                             min_window_size=25, max_window_size=26, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         # Esse daqui gera NAN no treino e na validacao, melhor nao usar
         euroc_v2_01_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
                                                              min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v2_02_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_02_medium/mav0/imu0/data.csv", y_csv_path="V2_02_medium/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                             min_window_size=25, max_window_size=30, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v2_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V2_03_difficult/mav0/imu0/data.csv", y_csv_path="V2_03_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                             min_window_size=28, max_window_size=29, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v1_02_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_02_medium/mav0/imu0/data.csv", y_csv_path="V1_02_medium/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                             min_window_size=27, max_window_size=28, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                             min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_v1_03_dataset = ParallelBatchTimeseriesDataset(x_csv_path="V1_03_difficult/mav0/imu0/data.csv", y_csv_path="V1_03_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
                                                              min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_mh1_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_01_easy/mav0/imu0/data.csv", y_csv_path="MH_01_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                           min_window_size=28, max_window_size=29, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_mh2_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_02_easy/mav0/imu0/data.csv", y_csv_path="MH_02_easy/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                           min_window_size=25, max_window_size=30, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_mh3_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_03_medium/mav0/imu0/data.csv", y_csv_path="MH_03_medium/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
                                                            min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_mh4_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_04_difficult/mav0/imu0/data.csv", y_csv_path="MH_04_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                           min_window_size=26, max_window_size=27, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         euroc_mh5_dataset = ParallelBatchTimeseriesDataset(x_csv_path="MH_05_difficult/mav0/imu0/data.csv", y_csv_path="MH_05_difficult/mav0/state_groundtruth_estimate0/data.csv", n_threads=2,
-                                                           min_window_size=29, max_window_size=30, batch_size=self.training_batch_size, shuffle=False, noise=None)
+                                                           min_window_size=25, max_window_size=35, batch_size=self.training_batch_size, shuffle=False, noise=None)
 
         # room1_tum_dataset = ParallelBatchTimeseriesDataset(x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv", n_threads=2,
         #                                                    min_window_size=40, max_window_size=100, batch_size=self.training_batch_size, shuffle=False, noise=None)
@@ -869,15 +869,15 @@ overflow the memory.
             validation_loss = 0.0
             ponderar_losses = 0.0
             self.optimizer.zero_grad()
-            # t = time.time()
+            t = time.time()
             for j, (X, y) in enumerate(train_manager):
                 # # Precisamos resetar o hidden state do LSTM a cada batch, ou
                 # # ocorre erro no backward(). O tamanho do batch para a cell eh
                 # # simplesmente o tamanho do batch em y ou X (tanto faz).
                 # self.feature_extractor.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device),
                 #                                             torch.zeros((self.num_directions * self.n_lstm_units, X.shape[0], self.hidden_layer_size), device=self.device))
-                # print("t carregando dados: ", '{:f}'.format(time.time() - t))
-                # t = time.time()
+                print("t carregando dados: ", '{:f}'.format(time.time() - t))
+                t = time.time()
                 with autocast(enabled=self.use_amp):
                     y_pred = self(X)
                     var = torch.exp(y_pred[:, self.output_size // 2:])
@@ -891,8 +891,8 @@ overflow the memory.
                 scaler.update()
                 self.optimizer.zero_grad()
 
-                # print("t GPU: ", '{:f}'.format(time.time() - t))
-                # t = time.time()
+                print("t GPU: ", '{:f}'.format(time.time() - t))
+                t = time.time()
                 # We need detach() to no accumulate gradient. Otherwise, memory
                 # overflow will happen.
                 # We divide by the size of batch because we dont need to
@@ -905,8 +905,8 @@ overflow the memory.
                 # # Run lr_scheduler OneCycleLr
                 # scheduler.step()
 
-                # print("t operando python: ", '{:f}'.format(time.time() - t))
-                # t = time.time()
+                print("t operando python: ", '{:f}'.format(time.time() - t))
+                t = time.time()
 
             # Tira a media ponderada das losses.
             training_loss = training_loss / ponderar_losses
