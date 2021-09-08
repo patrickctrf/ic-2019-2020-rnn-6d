@@ -555,7 +555,7 @@ Runs the experiment itself.
 
     model.eval()
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
-    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=200, max_window_size=201, shuffle=False, device=device, convert_first=True)
 
     predict = []

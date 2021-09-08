@@ -22,8 +22,8 @@ Runs the experiment itself.
     imu_handler.to(device)
 
     # ===========PREDICAO-TRAJETORIO-INTEIRA====================================
-    input_data = read_csv("dataset-room2_512_16/mav0/imu0/data.csv").to_numpy()
-    output_data = read_csv("dataset-room2_512_16/mav0/mocap0/data.csv").to_numpy()
+    input_data = read_csv("dataset-files/dataset-room2_512_16/mav0/imu0/data.csv").to_numpy()
+    output_data = read_csv("dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv").to_numpy()
 
     # =========SCALING======================================================
     # features without timestamp (we do not scale timestamp)

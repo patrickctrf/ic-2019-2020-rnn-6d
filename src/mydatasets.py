@@ -246,7 +246,7 @@ class BatchTimeseriesDataset(Dataset):
                                          reference_y_csv_path=reference_y_csv_path)
 
         try:
-            tabela = np.load(str(max_window_size) + str(min_window_size) +
+            tabela = np.load("dataset-cache/" + str(max_window_size) + str(min_window_size) +
                              str(x_csv_path).replace("/", "_").replace(".", "_") +
                              "_tabela_elementos_dataset.npy")
 
@@ -257,7 +257,7 @@ class BatchTimeseriesDataset(Dataset):
             for element in tqdm(self.base_dataset):
                 tabela[i] = element[0].shape[0]
                 i = i + 1
-            np.save(str(max_window_size) + str(min_window_size) +
+            np.save("dataset-cache/" + str(max_window_size) + str(min_window_size) +
                     str(x_csv_path).replace("/", "_").replace(".", "_") +
                     "_tabela_elementos_dataset.npy", tabela)
 
@@ -351,7 +351,7 @@ class ParallelBatchTimeseriesDataset(Dataset):
                                          reference_y_csv_path=reference_y_csv_path)
 
         try:
-            tabela = np.load(str(max_window_size) + str(min_window_size) +
+            tabela = np.load("dataset-cache/" + str(max_window_size) + str(min_window_size) +
                              str(x_csv_path).replace("/", "_").replace(".", "_") +
                              "_tabela_elementos_dataset.npy")
 
@@ -362,7 +362,7 @@ class ParallelBatchTimeseriesDataset(Dataset):
             for element in tqdm(self.base_dataset):
                 tabela[i] = element[0].shape[0]
                 i = i + 1
-            np.save(str(max_window_size) + str(min_window_size) +
+            np.save("dataset-cache/" + str(max_window_size) + str(min_window_size) +
                     str(x_csv_path).replace("/", "_").replace(".", "_") +
                     "_tabela_elementos_dataset.npy", tabela)
 

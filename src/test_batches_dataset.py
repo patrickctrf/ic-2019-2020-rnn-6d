@@ -5,8 +5,8 @@ from ptk.utils import BatchTimeseriesDataset
 
 dataset = \
     BatchTimeseriesDataset(
-        x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv",
-        y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+        x_csv_path="dataset-files/dataset-room2_512_16/mav0/imu0/data.csv",
+        y_csv_path="dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv",
         convert_first=True, min_window_size=100, max_window_size=350,
         batch_size=64
     )

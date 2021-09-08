@@ -49,10 +49,10 @@ Runs the experiment itself.
     model.eval()
     model.to(device)
 
-    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv",
+    room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
 
-    euroc_v2_dataset = AsymetricalTimeseriesDataset(x_csv_path="V2_01_easy/mav0/imu0/data.csv", y_csv_path="V2_01_easy/mav0/state_groundtruth_estimate0/data.csv",
+    euroc_v2_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/V2_01_easy/mav0/imu0/data.csv", y_csv_path="dataset-files/V2_01_easy/mav0/state_groundtruth_estimate0/data.csv",
                                                     min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
 
     predict = []

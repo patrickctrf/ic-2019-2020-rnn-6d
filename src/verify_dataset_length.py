@@ -8,8 +8,8 @@ from ptk import AsymetricalTimeseriesDataset
 
 dataset = \
     AsymetricalTimeseriesDataset(
-        x_csv_path="dataset-room2_512_16/mav0/imu0/data.csv",
-        y_csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", shuffle=False,
+        x_csv_path="dataset-files/dataset-room2_512_16/mav0/imu0/data.csv",
+        y_csv_path="dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv", shuffle=False,
         convert_first=False, min_window_size=100, max_window_size=350)
 
 try:
