@@ -3,18 +3,12 @@ import pickle
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from numpy import arange, random, array
-from pandas import read_csv
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import make_scorer, mean_squared_error
-from sklearn.model_selection import ShuffleSplit, cross_validate, KFold
+from numpy import arange, array
 from sklearn.tree import DecisionTreeRegressor
 from torch.utils.data import ConcatDataset
 from tqdm import tqdm
 
 from mydatasets import *
-from ptk.timeseries import *
-from models import *
 
 
 def experiment(device):
@@ -144,7 +138,6 @@ Runs the experiment itself.
 
 
 if __name__ == '__main__':
-
     # plot_csv()
 
     dev = "cpu"
