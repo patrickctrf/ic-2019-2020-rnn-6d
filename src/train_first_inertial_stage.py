@@ -24,7 +24,7 @@ Runs the experiment itself.
                                                        min_window_size=200, max_window_size=201, shuffle=False, noise=None)
 
     euroc_v2_02_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/V2_02_medium/mav0/imu0/data.csv", y_csv_path="dataset-files/V2_02_medium/mav0/state_groundtruth_estimate0/data.csv",
-                                                       min_window_size=200, max_window_size=201, shuffle=False, noise=None)
+                                                       min_window_size=200, max_window_size=201, shuffle=False, noise=None, convert_first=True)
 
     euroc_v2_03_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/V2_03_difficult/mav0/imu0/data.csv",
                                                        y_csv_path="dataset-files/V2_03_difficult/mav0/state_groundtruth_estimate0/data.csv",
@@ -62,7 +62,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=False,
-                           output_size=7 * 2, training_batch_size=16384, epochs=3, device=device, validation_percent=0.2)
+                           output_size=7 * 2, training_batch_size=16384, epochs=1, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
     # model = torch.load("best_model.pth")
@@ -145,7 +145,7 @@ if __name__ == '__main__':
 
     # plot_csv()
 
-    if torch.cuda.is_available():
+    if False and torch.cuda.is_available():
         dev = "cuda:0"
         print("Usando GPU")
     else:

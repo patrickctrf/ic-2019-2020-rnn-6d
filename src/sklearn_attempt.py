@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -60,13 +62,11 @@ Runs the experiment itself.
                                                      y_csv_path="dataset-files/MH_05_difficult/mav0/state_groundtruth_estimate0/data.csv",
                                                      min_window_size=200, max_window_size=201, shuffle=False, noise=None)
 
-    dataset = ConcatDataset([euroc_v1_01_dataset,
-                             euroc_v2_02_dataset,
-                             euroc_v2_03_dataset,
-                             # euroc_v1_02_dataset,
-                             euroc_v1_03_dataset,
-                             euroc_mh1_dataset])
+    dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
+                             euroc_mh1_dataset, euroc_mh5_dataset,
+                             euroc_v2_03_dataset, euroc_mh4_dataset])
 
+    print("Montando dataset: ")
     x_total = []
     y_total = []
     for x, y in tqdm(dataset):
@@ -76,18 +76,18 @@ Runs the experiment itself.
     x_total = np.array(x_total)
     y_total = np.array(y_total)
 
-    shuffle_splitter = KFold()
+    print("Treinando! Pode demorar horas e não temos log...")
+
     regressor = DecisionTreeRegressor()
-    # cv_results = \
-    #     cross_validate(estimator=regressor, X=x_total, y=y_total,
-    #                    cv=shuffle_splitter, verbose=10, n_jobs=4,
-    #                    scoring={"MSE": make_scorer(mean_squared_error, greater_is_better=False), })
-    #
-    # print("\nRMSE para cada repetição: \n", (-cv_results["test_MSE"]) ** (1 / 2))
-    #
-    # print("\n\nRMSE médio: ", ((-cv_results["test_MSE"]) ** (1 / 2)).mean())
 
     regressor.fit(x_total, y_total)
+
+    # save the model to disk
+    filename = 'comparison_model_sklearn.sav'
+    pickle.dump(regressor, open(filename, 'wb'))
+
+    # load the model from disk
+    regressor = pickle.load(open(filename, 'rb'))
 
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv",
                                                      min_window_size=200, max_window_size=201, shuffle=False, device=device, )
@@ -97,7 +97,7 @@ Runs the experiment itself.
 
     predict = []
     reference = []
-    for i, (x, y) in tqdm(enumerate(euroc_v1_02_dataset), total=len(euroc_v1_02_dataset)):
+    for i, (x, y) in tqdm(enumerate(euroc_mh3_dataset), total=len(euroc_mh3_dataset)):
         y_hat = regressor.predict(x.reshape(1, -1)).reshape(-1)
         predict.append(y_hat)
         reference.append(y)
@@ -138,21 +138,17 @@ Runs the experiment itself.
 
     # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 
-    print(model)
+    print(regressor)
 
-    return model
+    return regressor
 
 
 if __name__ == '__main__':
 
     # plot_csv()
 
-    if torch.cuda.is_available():
-        dev = "cuda:0"
-        print("Usando GPU")
-    else:
-        dev = "cpu"
-        print("Usando CPU")
+    dev = "cpu"
+    print("Usando CPU")
     device = torch.device(dev)
 
     experiment(device=device)
