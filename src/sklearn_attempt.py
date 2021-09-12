@@ -3,6 +3,11 @@ import torch
 from matplotlib import pyplot as plt
 from numpy import arange, random, array
 from pandas import read_csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import make_scorer, mean_squared_error
+from sklearn.model_selection import ShuffleSplit, cross_validate, KFold
+from sklearn.tree import DecisionTreeRegressor
+from torch.utils.data import ConcatDataset
 from tqdm import tqdm
 
 from mydatasets import *
@@ -16,6 +21,7 @@ Runs the experiment itself.
 
     :return: Trained model.
     """
+
     euroc_v1_01_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/V1_01_easy/mav0/imu0/data.csv", y_csv_path="dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv",
                                                        min_window_size=200, max_window_size=201, shuffle=False, noise=None)
 
@@ -54,51 +60,47 @@ Runs the experiment itself.
                                                      y_csv_path="dataset-files/MH_05_difficult/mav0/state_groundtruth_estimate0/data.csv",
                                                      min_window_size=200, max_window_size=201, shuffle=False, noise=None)
 
+    dataset = ConcatDataset([euroc_v1_01_dataset,
+                             euroc_v2_02_dataset,
+                             euroc_v2_03_dataset,
+                             # euroc_v1_02_dataset,
+                             euroc_v1_03_dataset,
+                             euroc_mh1_dataset])
 
-# Recebe os arquivos do dataset e o aloca de no formato (numpy npz) adequado.
-    # X, y = format_dataset(dataset_directory="dataset-room2_512_16", file_format="NPZ")
-    # join_npz_files(files_origin_path="./tmp_x", output_file="./x_data.npz")
-    # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
-    # return
+    x_total = []
+    y_total = []
+    for x, y in tqdm(dataset):
+        x_total.append(x.flatten())
+        y_total.append(y)
 
-    model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=False,
-                           output_size=7 * 2, training_batch_size=16384, epochs=3, device=device, validation_percent=0.2)
+    x_total = np.array(x_total)
+    y_total = np.array(y_total)
 
-    # model.load_state_dict(torch.load("best_model_state_dict.pth"))
-    # model = torch.load("best_model.pth")
+    shuffle_splitter = KFold()
+    regressor = DecisionTreeRegressor()
+    # cv_results = \
+    #     cross_validate(estimator=regressor, X=x_total, y=y_total,
+    #                    cv=shuffle_splitter, verbose=10, n_jobs=4,
+    #                    scoring={"MSE": make_scorer(mean_squared_error, greater_is_better=False), })
+    #
+    # print("\nRMSE para cada repetição: \n", (-cv_results["test_MSE"]) ** (1 / 2))
+    #
+    # print("\n\nRMSE médio: ", ((-cv_results["test_MSE"]) ** (1 / 2)).mean())
 
-    # model = PreintegrationModule(device=device)
-
-    # Carrega o extrator de features convolucional pretreinado e congela (grad)
-    # model.load_feature_extractor()
-
-    model.to(device)
-
-    # Let's go fit! Comment if only loading pretrained model.
-    # model.fit(X, y)
-    model.fit()
-
-    # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
-    # device = torch.device("cpu")
-    # model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=False,
-    #                        output_size=7 * 2, training_batch_size=512, epochs=50, device=device, validation_percent=0.2)
-    # model.load_state_dict(torch.load("best_model_state_dict.pth"))
-    model = torch.load("best_model.pth")
-    model.eval()
-    model.to(device)
+    regressor.fit(x_total, y_total)
 
     room2_tum_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/dataset-room2_512_16/mav0/imu0/data.csv", y_csv_path="dataset-files/dataset-room2_512_16/mav0/mocap0/data.csv",
-                                                     min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
+                                                     min_window_size=200, max_window_size=201, shuffle=False, device=device, )
 
     euroc_v2_dataset = AsymetricalTimeseriesDataset(x_csv_path="dataset-files/V2_01_easy/mav0/imu0/data.csv", y_csv_path="dataset-files/V2_01_easy/mav0/state_groundtruth_estimate0/data.csv",
-                                                    min_window_size=30, max_window_size=31, shuffle=False, device=device, convert_first=True)
+                                                    min_window_size=200, max_window_size=201, shuffle=False, device=device, )
 
     predict = []
     reference = []
-    for i, (x, y) in tqdm(enumerate(euroc_v2_02_dataset), total=len(euroc_v2_02_dataset)):
-        y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
-        predict.append(y_hat.detach().cpu().numpy())
-        reference.append(y.detach().cpu().numpy())
+    for i, (x, y) in tqdm(enumerate(euroc_v1_02_dataset), total=len(euroc_v1_02_dataset)):
+        y_hat = regressor.predict(x.reshape(1, -1)).reshape(-1)
+        predict.append(y_hat)
+        reference.append(y)
 
     predict = array(predict)
     reference = array(reference)
