@@ -852,8 +852,8 @@ overflow the memory.
                                        euroc_v2_03_dataset, euroc_mh4_dataset])
         val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
-        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=3, multiprocessing_context='spawn')
-        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=3, multiprocessing_context='spawn')
+        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=12, multiprocessing_context='spawn')
+        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=12, multiprocessing_context='spawn')
 
         # Pesos das saídas: px py pz wq wx wy wz (translacoes e quaternios).
         weights = array([1000, 1000, 1000, 1, 1, 1, 1])
@@ -866,7 +866,7 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = PosAndAngleLoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05, )  # momentum=0.9, nesterov=True)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=0.15, last_epoch=-1)
         # scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.1)

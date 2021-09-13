@@ -53,7 +53,7 @@ Runs the experiment itself.
 
     predict = []
     reference = []
-    for i, (x, y) in tqdm(enumerate(euroc_v1_01_dataset), total=len(euroc_v1_01_dataset)):
+    for i, (x, y) in tqdm(enumerate(euroc_v1_02_dataset), total=len(euroc_v1_02_dataset)):
         y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
         predict.append(y_hat.detach().cpu().numpy())
         reference.append(y.detach().cpu().numpy())
@@ -103,7 +103,7 @@ if __name__ == '__main__':
 
     # plot_csv()
 
-    if torch.cuda.is_available():
+    if False and torch.cuda.is_available():
         dev = "cuda:0"
         print("Usando GPU")
     else:
@@ -149,8 +149,8 @@ if __name__ == '__main__':
                                                      y_csv_path="dataset-files/MH_05_difficult/mav0/state_groundtruth_estimate0/data.csv",
                                                      min_window_size=200, max_window_size=201, shuffle=False, noise=None, convert_first=True)
 
-    # experiment(device=device)
-    #
+    experiment(device=device)
+
     # model = [Parameter(torch.randn(2, 2, requires_grad=True))]
     # optimizer = SGD(model, 0.1)
     # scheduler1 = ExponentialLR(optimizer, gamma=0.15, last_epoch=-1)
