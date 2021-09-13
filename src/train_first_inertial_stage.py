@@ -23,8 +23,8 @@ Runs the experiment itself.
     # join_npz_files(files_origin_path="./tmp_y", output_file="./y_data.npz")
     # return
 
-    model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=False,
-                           output_size=7 * 2, training_batch_size=16384, epochs=1, device=device, validation_percent=0.2)
+    model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=3, bidirectional=True, use_amp=True,
+                           output_size=7 * 2, training_batch_size=4096, epochs=1, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
     # model = torch.load("best_model.pth")

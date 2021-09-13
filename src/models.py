@@ -880,8 +880,8 @@ overflow the memory.
         for i in tqdm_bar:
             # Voltamos ao modo treino
             self.train()
-            train_manager = DataManager(train_loader, device=self.device, buffer_size=10)
-            val_manager = DataManager(val_loader, device=self.device, buffer_size=10)
+            train_manager = DataManager(train_loader, device=self.device, buffer_size=2)
+            val_manager = DataManager(val_loader, device=self.device, buffer_size=2)
             training_loss = 0.0
             validation_loss = 0.0
             ponderar_losses = 0.0
