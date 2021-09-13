@@ -489,8 +489,8 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 32
-        n_output_features = 32
+        n_base_filters = 8
+        n_output_features = 8
         self.feature_extractor = \
             Sequential(
                 #
@@ -520,8 +520,8 @@ error within CUDA.
         self.dense_network = Sequential(
             nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16),
             nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
-            nn.Linear(16, 16), nn.Tanh(),
-            nn.BatchNorm1d(16, affine=True),
+            # nn.Linear(16, 16), nn.Tanh(),
+            # nn.BatchNorm1d(16, affine=True),
             nn.Linear(16, self.output_size)
         )
         return
@@ -852,8 +852,8 @@ overflow the memory.
                                        euroc_v2_03_dataset, euroc_mh4_dataset])
         val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
-        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=5, multiprocessing_context='spawn')
-        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=5, multiprocessing_context='spawn')
+        train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
+        val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
 
         # Pesos das saídas: px py pz wq wx wy wz (translacoes e quaternios).
         weights = array([1000, 1000, 1000, 1, 1, 1, 1])
