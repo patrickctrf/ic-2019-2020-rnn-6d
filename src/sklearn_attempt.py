@@ -4,6 +4,8 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from numpy import arange, array
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 from torch.utils.data import ConcatDataset
 from tqdm import tqdm
@@ -72,7 +74,7 @@ Runs the experiment itself.
 
     print("Treinando! Pode demorar horas e não temos log...")
 
-    regressor = DecisionTreeRegressor()
+    regressor = MultiOutputRegressor(SVR(cache_size=20000))
 
     regressor.fit(x_total, y_total)
 

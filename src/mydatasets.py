@@ -95,9 +95,9 @@ class AsymetricalTimeseriesDataset(Dataset):
         input_features = self.input_scaler.transform(input_features)
         output_features = self.output_scaler.transform(output_features)
 
-        # Replacing scaled data (we kept the original TIMESTAMP)
+        # Replacing scaled data (we kept the original TIMESTAMP and quaternions)
         self.input_data[:, 1:] = input_features
-        self.output_data[:, 1:] = output_features
+        self.output_data[:, 1:4] = output_features[:, :3]
         # =========end-SCALING==================================================
 
         # Save timestamps for syncing samples.
@@ -221,7 +221,7 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
         # Scaling data
         input_scaler = StandardScaler()
         input_scaler.fit(input_features)
-        output_scaler = MinMaxScaler()
+        output_scaler = StandardScaler()
         output_scaler.fit(output_features)
 
         return input_scaler, output_scaler
