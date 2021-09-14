@@ -73,7 +73,7 @@ Intended to be used as iterator.
 class AsymetricalTimeseriesDataset(Dataset):
 
     def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, noise=None, convert_first=False, device=torch.device("cpu"), shuffle=True,
-                 reference_x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", reference_y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv"):
+                 reference_x_csv_path="dataset-files/V1_01_easy/mav0/imu0/data.csv", reference_y_csv_path="dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv"):
         super().__init__()
         self.input_data = read_csv(x_csv_path).to_numpy()
         self.output_data = read_csv(y_csv_path).to_numpy()
@@ -82,23 +82,23 @@ class AsymetricalTimeseriesDataset(Dataset):
         self.device = device
         self.noise = noise
 
-        # # =========SCALING======================================================
-        # # features without timestamp (we do not scale timestamp)
-        # input_features = self.input_data[:, 1:]
-        # output_features = self.output_data[:, 1:]
-        #
-        # # Scaling data
-        # self.input_scaler, self.output_scaler = \
-        #     AsymetricalTimeseriesDataset.get_reference_scaler(
-        #         reference_x_csv_path, reference_y_csv_path
-        #     )
-        # input_features = self.input_scaler.transform(input_features)
-        # output_features = self.output_scaler.transform(output_features)
-        #
-        # # Replacing scaled data (we kept the original TIMESTAMP)
-        # self.input_data[:, 1:] = input_features
-        # self.output_data[:, 1:] = output_features
-        # # =========end-SCALING==================================================
+        # =========SCALING======================================================
+        # features without timestamp (we do not scale timestamp)
+        input_features = self.input_data[:, 1:]
+        output_features = self.output_data[:, 1:]
+
+        # Scaling data
+        self.input_scaler, self.output_scaler = \
+            AsymetricalTimeseriesDataset.get_reference_scaler(
+                reference_x_csv_path, reference_y_csv_path
+            )
+        input_features = self.input_scaler.transform(input_features)
+        output_features = self.output_scaler.transform(output_features)
+
+        # Replacing scaled data (we kept the original TIMESTAMP)
+        self.input_data[:, 1:] = input_features
+        self.output_data[:, 1:] = output_features
+        # =========end-SCALING==================================================
 
         # Save timestamps for syncing samples.
         self.input_timestamp = self.input_data[:, 0]
@@ -229,7 +229,7 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
 
 class BatchTimeseriesDataset(Dataset):
     def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1, noise=None,
-                 reference_x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", reference_y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv"):
+                 reference_x_csv_path="dataset-files/V1_01_easy/mav0/imu0/data.csv", reference_y_csv_path="dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv"):
         super().__init__()
         self.batch_size = batch_size
 
@@ -330,7 +330,7 @@ def _load_data_for_parallel_dataset(base_dataset, array_idx):
 
 class ParallelBatchTimeseriesDataset(Dataset):
     def __init__(self, x_csv_path, y_csv_path, max_window_size=200, min_window_size=10, shuffle=True, batch_size=1, noise=None,
-                 reference_x_csv_path="dataset-room1_512_16/mav0/imu0/data.csv", reference_y_csv_path="dataset-room1_512_16/mav0/mocap0/data.csv",
+                 reference_x_csv_path="dataset-files/V1_01_easy/mav0/imu0/data.csv", reference_y_csv_path="dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv",
                  n_threads=10):
         super().__init__()
         self.batch_size = batch_size
