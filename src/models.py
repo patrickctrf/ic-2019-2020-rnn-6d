@@ -400,7 +400,7 @@ channel into an individual state representation.
         )
 
         self.dense_network = Sequential(
-            nn.Linear(self.num_directions * self.hidden_layer_size * 5, 32),
+            nn.Linear(self.num_directions * self.hidden_layer_size, 32),
             nn.PReLU(num_parameters=32),
             nn.Linear(32, 16),
             nn.PReLU(num_parameters=16),
@@ -415,7 +415,7 @@ channel into an individual state representation.
 
         # All batch size, whatever sequence length, forward direction and
         # lstm output size (hidden size).
-        return lstm_out.flatten(start_dim=1)
+        return lstm_out[:, -1, :].flatten(start_dim=1)
 
 
 class Conv1DFeatureExtractor(nn.Module):
@@ -837,7 +837,7 @@ input sequence and returns the prediction for the final step.
         #
         output_seq = self.feature_extractor(input_seq)
 
-        predictions = self.dense_network(output_seq.view(output_seq.shape[0], -1))
+        predictions = self.dense_network(output_seq.flatten(start_dim=1))
 
         # output_seq = self.feature_extractor(input_seq)
         #

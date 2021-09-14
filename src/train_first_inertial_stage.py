@@ -103,7 +103,7 @@ if __name__ == '__main__':
 
     # plot_csv()
 
-    if torch.cuda.is_available():
+    if False and torch.cuda.is_available():
         dev = "cuda:0"
         print("Usando GPU")
     else:
