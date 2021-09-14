@@ -411,7 +411,7 @@ channel into an individual state representation.
 
     def forward(self, input_seq):
 
-        lstm_out, _ = self.feature_extractor(input_seq.movedim(input_seq, -2, -1))
+        lstm_out, _ = self.feature_extractor(input_seq.movedim(-2, -1))
 
         # All batch size, whatever sequence length, forward direction and
         # lstm output size (hidden size).
@@ -804,7 +804,7 @@ error within CUDA.
         #                          bidirectional=bidirectional)
 
         self.feature_extractor = \
-            ConvLSTM(input_size=16,
+            ConvLSTM(input_size=input_size,
                      hidden_layer_size=hidden_layer_size,
                      output_size=output_size,
                      n_lstm_units=n_lstm_units,
