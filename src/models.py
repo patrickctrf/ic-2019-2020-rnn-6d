@@ -387,7 +387,6 @@ channel into an individual state representation.
         n_base_filters = 8
         n_output_features = 32
         self.feature_extractor = Sequential(
-            nn.BatchNorm1d(input_size, affine=False),
             SignalEnvelope(n_channels=input_size),
             Conv1d(4 * input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=1 * n_base_filters), nn.BatchNorm1d(1 * n_base_filters),
             Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters), nn.BatchNorm1d(2 * n_base_filters),
