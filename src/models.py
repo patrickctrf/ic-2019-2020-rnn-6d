@@ -338,7 +338,17 @@ input sequence and returns the prediction for the final step.
         return lstm_out.view(input_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)
 
 
-class LSTMReceivingWavelet(nn.Module):
+class _MoveDimModule(nn.Module):
+    def __init__(self, source=-2, destination=-1):
+        super().__init__()
+        self.source = source
+        self.destination = destination
+
+    def forward(self, input_seq):
+        return movedim(input_seq, self.source, self.destination)
+
+
+class ConvLSTM(nn.Module):
     def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, bidirectional=False):
         """
 Receives a multi channel signal, calculate its envelopes, then calculate its
@@ -374,78 +384,38 @@ channel into an individual state representation.
             self.bidirectional = 0
             self.num_directions = 1
 
-        self.envelope = SignalEnvelope(n_channels=input_size, norm_order=5)
-        self.wavelet = SignalWavelet()
-
-        # Each LSTM will compress the sequence of different sizes sequences
-        # into an individual state representation.
-        self.lstm_imu = nn.LSTM(input_size, self.hidden_layer_size,
-                                batch_first=True, num_layers=self.n_lstm_units,
-                                bidirectional=bool(self.bidirectional),
-                                dropout=0.5)
-
-        self.lstm_yl = nn.LSTM(4 * input_size, self.hidden_layer_size,
-                               batch_first=True, num_layers=self.n_lstm_units,
-                               bidirectional=bool(self.bidirectional),
-                               dropout=0.5)
-
-        self.lstm_yh_0 = nn.LSTM(4 * input_size, self.hidden_layer_size,
-                                 batch_first=True, num_layers=self.n_lstm_units,
-                                 bidirectional=bool(self.bidirectional),
-                                 dropout=0.5)
-
-        self.lstm_yh_1 = nn.LSTM(4 * input_size, self.hidden_layer_size,
-                                 batch_first=True, num_layers=self.n_lstm_units,
-                                 bidirectional=bool(self.bidirectional),
-                                 dropout=0.5)
-
-        self.lstm_yh_2 = nn.LSTM(4 * input_size, self.hidden_layer_size,
-                                 batch_first=True, num_layers=self.n_lstm_units,
-                                 bidirectional=bool(self.bidirectional),
-                                 dropout=0.5)
+        n_base_filters = 8
+        n_output_features = 32
+        self.feature_extractor = Sequential(
+            nn.BatchNorm1d(input_size, affine=False),
+            SignalEnvelope(n_channels=input_size),
+            Conv1d(4 * input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=1 * n_base_filters), nn.BatchNorm1d(1 * n_base_filters),
+            Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters), nn.BatchNorm1d(2 * n_base_filters),
+            Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features), nn.BatchNorm1d(n_output_features),
+            _MoveDimModule(source=-2, destination=-1),
+            nn.LSTM(n_output_features, self.hidden_layer_size,
+                    batch_first=True, num_layers=self.n_lstm_units,
+                    bidirectional=bool(self.bidirectional),
+                    )
+        )
 
         self.dense_network = Sequential(
             nn.Linear(self.num_directions * self.hidden_layer_size * 5, 32),
-            nn.PReLU(num_parameters=32, init=0.1),
+            nn.PReLU(num_parameters=32),
             nn.Linear(32, 16),
-            nn.PReLU(num_parameters=16, init=0.1),
+            nn.PReLU(num_parameters=16),
             nn.Linear(16, self.output_size)
         )
-        # We train using multiple inputs (mini_batch), so we let this cell ready
-        # to be called.
-        # self.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
-        #                           torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
-        self.hidden_cell_zeros = None
-
-        self.hidden_cell_output = None
 
         return
 
     def forward(self, input_seq):
-        """
-Classic forward method of every PyTorch model, as fast as possible. Receives an
-input sequence and returns the prediction for the final step.
 
-        :param input_seq: Input sequence of the time series.
-        :return: The prediction in the end of the series.
-        """
+        lstm_out, _ = self.feature_extractor(input_seq.movedim(input_seq, -2, -1))
 
-        yl, yh = self.wavelet(self.envelope(input_seq.movedim(1, 2)))
-
-        # (seq_len, batch, input_size), mas pode inverter o
-        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
-        # lstm_imu_out, _ = self.lstm_imu(input_seq)
-        # lstm_yl_out, _ = self.lstm_yl(yl)
-        # lstm_yh_0_out, _ = self.lstm_yh_0(yh[0])
-        # lstm_yh_1_out, _ = self.lstm_yh_1(yh[1])
-        # lstm_yh_2_out, _ = self.lstm_yh_2(yh[2])
-
-        return torch.cat((self.lstm_imu(input_seq)[0][:, -1, :],
-                          self.lstm_yl(yl.movedim(1, 2))[0][:, -1, :],
-                          self.lstm_yh_0(yh[0].movedim(1, 2))[0][:, -1, :],
-                          self.lstm_yh_1(yh[1].movedim(1, 2))[0][:, -1, :],
-                          self.lstm_yh_2(yh[2].movedim(1, 2))[0][:, -1, :]),
-                         dim=1)
+        # All batch size, whatever sequence length, forward direction and
+        # lstm output size (hidden size).
+        return lstm_out.flatten(start_dim=1)
 
 
 class Conv1DFeatureExtractor(nn.Module):
@@ -559,6 +529,116 @@ input sequence and returns the prediction for the final step.
             self.sum_layer(input_seq),
             self.adaptive_pooling(input_seq),
         ), dim=1)
+
+
+class LSTMReceivingWavelet(nn.Module):
+    def __init__(self, input_size=1, hidden_layer_size=100, output_size=1, n_lstm_units=1, bidirectional=False):
+        """
+Receives a multi channel signal, calculate its envelopes, then calculate its
+wavelets and finally uses LSTMs to compress each Wavelet and original signal
+channel into an individual state representation.
+
+        :param input_size: Input dimension size (how many features).
+        :param hidden_layer_size: How many features there will be inside each LSTM.
+        :param output_size: Output dimension size (how many features).
+        :param n_lstm_units: How many stacked LSTM cells (or units).
+        :param epochs: The number of epochs to train. The final model after
+        train will be the one with best VALIDATION loss, not necessarily the
+        model found after whole "epochs" number.
+        :param training_batch_size: Size of each mini-batch during training
+        process. If number os samples is not a multiple of
+        "training_batch_size", the final batch will just be smaller than the
+        others.
+        :param validation_percent: The percentage of samples reserved for
+        validation (cross validation) during training inside fit() method.
+        :param bidirectional: If the LSTM units will be bidirectional.
+        :param device: PyTorch device, such as torch.device("cpu") or
+        torch.device("cuda:0").
+        """
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_layer_size = hidden_layer_size
+        self.output_size = output_size
+        self.n_lstm_units = n_lstm_units
+        if bidirectional:
+            self.bidirectional = 1
+            self.num_directions = 2
+        else:
+            self.bidirectional = 0
+            self.num_directions = 1
+
+        self.envelope = SignalEnvelope(n_channels=input_size, norm_order=5)
+        self.wavelet = SignalWavelet()
+
+        # Each LSTM will compress the sequence of different sizes sequences
+        # into an individual state representation.
+        self.lstm_imu = nn.LSTM(input_size, self.hidden_layer_size,
+                                batch_first=True, num_layers=self.n_lstm_units,
+                                bidirectional=bool(self.bidirectional),
+                                dropout=0.5)
+
+        self.lstm_yl = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                               batch_first=True, num_layers=self.n_lstm_units,
+                               bidirectional=bool(self.bidirectional),
+                               dropout=0.5)
+
+        self.lstm_yh_0 = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                                 batch_first=True, num_layers=self.n_lstm_units,
+                                 bidirectional=bool(self.bidirectional),
+                                 dropout=0.5)
+
+        self.lstm_yh_1 = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                                 batch_first=True, num_layers=self.n_lstm_units,
+                                 bidirectional=bool(self.bidirectional),
+                                 dropout=0.5)
+
+        self.lstm_yh_2 = nn.LSTM(4 * input_size, self.hidden_layer_size,
+                                 batch_first=True, num_layers=self.n_lstm_units,
+                                 bidirectional=bool(self.bidirectional),
+                                 dropout=0.5)
+
+        self.dense_network = Sequential(
+            nn.Linear(self.num_directions * self.hidden_layer_size * 5, 32),
+            nn.PReLU(num_parameters=32, init=0.1),
+            nn.Linear(32, 16),
+            nn.PReLU(num_parameters=16, init=0.1),
+            nn.Linear(16, self.output_size)
+        )
+        # We train using multiple inputs (mini_batch), so we let this cell ready
+        # to be called.
+        # self.hidden_cell_zeros = (torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device),
+        #                           torch.zeros((self.num_directions * self.n_lstm_units, self.training_batch_size, self.hidden_layer_size), device=self.device))
+        self.hidden_cell_zeros = None
+
+        self.hidden_cell_output = None
+
+        return
+
+    def forward(self, input_seq):
+        """
+Classic forward method of every PyTorch model, as fast as possible. Receives an
+input sequence and returns the prediction for the final step.
+
+        :param input_seq: Input sequence of the time series.
+        :return: The prediction in the end of the series.
+        """
+
+        yl, yh = self.wavelet(self.envelope(input_seq.movedim(1, 2)))
+
+        # (seq_len, batch, input_size), mas pode inverter o
+        # batch com o seq_len se fizer batch_first==1 na criacao do LSTM
+        # lstm_imu_out, _ = self.lstm_imu(input_seq)
+        # lstm_yl_out, _ = self.lstm_yl(yl)
+        # lstm_yh_0_out, _ = self.lstm_yh_0(yh[0])
+        # lstm_yh_1_out, _ = self.lstm_yh_1(yh[1])
+        # lstm_yh_2_out, _ = self.lstm_yh_2(yh[2])
+
+        return torch.cat((self.lstm_imu(input_seq)[0][:, -1, :],
+                          self.lstm_yl(yl.movedim(1, 2))[0][:, -1, :],
+                          self.lstm_yh_0(yh[0].movedim(1, 2))[0][:, -1, :],
+                          self.lstm_yh_1(yh[1].movedim(1, 2))[0][:, -1, :],
+                          self.lstm_yh_2(yh[2].movedim(1, 2))[0][:, -1, :]),
+                         dim=1)
 
 
 class PreintegrationModule(nn.Module):
