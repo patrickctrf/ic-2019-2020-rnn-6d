@@ -803,8 +803,15 @@ error within CUDA.
         #                          n_lstm_units=n_lstm_units,
         #                          bidirectional=bidirectional)
 
-        self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
-                                                        output_size=output_size)
+        self.feature_extractor = \
+            ConvLSTM(input_size=16,
+                     hidden_layer_size=hidden_layer_size,
+                     output_size=output_size,
+                     n_lstm_units=n_lstm_units,
+                     bidirectional=bidirectional)
+
+        # self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
+        #                                                 output_size=output_size)
 
         # Assim nao precisamos adaptar a rede densa a uma saida de CNN ou LSTM,
         # ja pegamos a rede adaptada do proprio extrator de
