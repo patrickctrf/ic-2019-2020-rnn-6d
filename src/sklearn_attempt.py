@@ -74,7 +74,7 @@ Runs the experiment itself.
 
     print("Treinando! Pode demorar horas e não temos log...")
 
-    regressor = MultiOutputRegressor(SVR(), n_jobs=4)
+    regressor = MultiOutputRegressor(SVR(max_iter=200, tol=0.1, verbose=True), n_jobs=4)
 
     regressor.fit(x_total, y_total)
 
