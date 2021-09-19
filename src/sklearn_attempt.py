@@ -7,7 +7,7 @@ from numpy import arange, array
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
-from torch.utils.data import ConcatDataset
+from torch.utils.data import ConcatDataset, DataLoader
 from tqdm import tqdm
 
 from mydatasets import *
@@ -93,7 +93,8 @@ Runs the experiment itself.
 
     predict = []
     reference = []
-    for i, (x, y) in tqdm(enumerate(euroc_mh3_dataset), total=len(euroc_mh3_dataset)):
+    dataloader = DataLoader(dataset=euroc_mh3_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
+    for i, (x, y) in tqdm(enumerate(dataloader), total=len(dataloader)):
         y_hat = regressor.predict(x.reshape(1, -1)).reshape(-1)
         predict.append(y_hat)
         reference.append(y)

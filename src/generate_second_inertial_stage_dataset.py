@@ -16,7 +16,7 @@ Runs the experiment itself.
     """
     # The model used for predictions
     sampling_window_size = 200
-    imu_handler = IMUHandlerWithPreintegration(sampling_window_size=sampling_window_size, device=device, data_type=torch.double)
+    imu_handler = IMUHandlerWithPreintegration(sampling_window_size=sampling_window_size, device=device)
     # imu_handler.load_feature_extractor()
     imu_handler.double()
     imu_handler.to(device)
@@ -71,6 +71,7 @@ Runs the experiment itself.
         plt.close()
         plt.plot(input_timestamp[0 + offset:][:predict.shape[0]], predict[:, i], output_timestamp, output_features[:, i])
         plt.legend(['predict', 'reference'], loc='upper right')
+        plt.title(dim_name)
         plt.savefig(dim_name + "_inteira.png", dpi=200)
         plt.show()
 
