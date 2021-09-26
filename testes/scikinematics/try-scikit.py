@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import skinematics
+from matplotlib import pyplot as plt
 
 from models import *
 from ptk.utils.numpytools import *
@@ -78,6 +79,15 @@ Runs the experiment itself.
     my_sensor = ScikitOdometry(in_file='data_xsens.txt',
                                R_init=initial_orientation,
                                pos_init=initial_position)
+
+    dimensoes = ["qw", "qx", "qy", "qz", "px", "py", "pz", ]
+    plt.close()
+    for i, dim_name in enumerate(dimensoes):
+        plt.plot(np.hstack((my_sensor.quat, my_sensor.pos))[:, i])
+    plt.legend(dimensoes, loc='upper right')
+    plt.title('scikit-kinematics')
+    plt.savefig('scikit-kinematics' + ".png", dpi=200)
+    plt.show()
 
 
 if __name__ == '__main__':
