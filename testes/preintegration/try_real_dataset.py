@@ -20,10 +20,10 @@ Runs the experiment itself.
     ones = torch.ones(1, n_steps, 1)
     zeros = torch.zeros(1, n_steps, 1)
 
-    dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 1:]
+    dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[1000:, 1:]
     dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
 
-    timestamp_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 0:1]
+    timestamp_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[1000:, 0:1]
     timestamp_dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 0:1]
 
     output_tensor = model(torch.tensor(dados_de_entrada_imu, dtype=torch.float32).unsqueeze(dim=0))[0]
@@ -60,8 +60,6 @@ Runs the experiment itself.
         plt.title(dim_name)
         plt.savefig(dim_name + ".png", dpi=200)
         plt.show()
-
-
 
     print(model)
 

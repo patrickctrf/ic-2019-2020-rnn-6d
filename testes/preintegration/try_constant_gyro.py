@@ -1,14 +1,4 @@
-import numpy as np
-import torch
-from matplotlib import pyplot as plt
-from numpy import arange, array
-from pandas import read_csv
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
 from models import *
-from mydatasets import *
-from ptk import *
 from ptk.utils.torchtools import quaternion_into_axis_angle
 
 
@@ -21,7 +11,7 @@ Runs the experiment itself.
 
     model = EachSamplePreintegrationModule()
 
-    n_steps = 10
+    n_steps = 10 ** 4
     ones = torch.ones(1, n_steps, 1)
     zeros = torch.zeros(1, n_steps, 1)
 
@@ -39,15 +29,8 @@ Runs the experiment itself.
 
 
 if __name__ == '__main__':
-
-    # plot_csv()
-
-    if torch.cuda.is_available():
-        dev = "cuda:0"
-        print("Usando GPU")
-    else:
-        dev = "cpu"
-        print("Usando CPU")
+    dev = "cpu"
+    print("Usando CPU")
     device = torch.device(dev)
 
     experiment(device)

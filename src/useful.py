@@ -84,7 +84,7 @@ def plot_csv(csv_path="dataset-room2_512_16/mav0/mocap0/data.csv"):
         plt.close()
         output_data.plot(kind='scatter', x=output_data.columns[0], y=key, color='red')
         plt.savefig(key + ".png", dpi=200)
-        # plt.show()
+        plt.show()
 
     return
 
