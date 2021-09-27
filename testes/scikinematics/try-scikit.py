@@ -31,29 +31,14 @@ class ScikitOdometry(skinematics.imus.IMU_Base):
         - mag : mag_field_direction
         '''
 
-        # Get the sampling rate from the second line in the file
-        try:
-            fh = open(in_file)
-            fh.readline()
-            line = fh.readline()
-            rate = np.float(line.split(':')[1].split('H')[0])
-            fh.close()
-
-        except FileNotFoundError:
-            print('{0} does not exist!'.format(in_file))
-            return -1
-
-        # Read the data
-        data = pd.read_csv(in_file,
-                           sep='\t',
-                           skiprows=4,
-                           index_col=False)
+        dataset = pd.read_csv(in_file).to_numpy()
+        omega = dataset[:, 1:4]
+        acc = dataset[:, 4:7]
 
         # Extract the columns that you want, and pass them on
-        in_data = {'rate': rate,
-                   'acc': data.filter(regex='Acc').values,
-                   'omega': data.filter(regex='Gyr').values,
-                   'mag': data.filter(regex='Mag').values}
+        in_data = {'rate': 200,
+                   'acc': acc,
+                   'omega': omega}
         self._set_data(in_data)
 
 
@@ -64,30 +49,47 @@ Runs the experiment itself.
     :return: Trained model.
     """
 
-    quaternion = [0., 1., 0., 0.]
+    dataset = \
+        pd.read_csv(
+            "dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv"
+        ).to_numpy()
+    initial_position = dataset[0, 1:4]
+    initial_orientation = dataset[0, 4:8]
 
     rotation_matrix = \
         axis_angle_into_rotation_matrix(
             *quaternion_into_axis_angle(
-                quaternion
+                initial_orientation
             )
         )
 
     initial_orientation = rotation_matrix
-    initial_position = np.r_[0, 0, 0]
 
-    my_sensor = ScikitOdometry(in_file='data_xsens.txt',
+    my_sensor = ScikitOdometry(in_file='dataset-files/V1_01_easy/mav0/imu0/data.csv',
                                R_init=initial_orientation,
-                               pos_init=initial_position)
+                               pos_init=initial_position,
+                               q_type="analytical")
 
-    dimensoes = ["qw", "qx", "qy", "qz", "px", "py", "pz", ]
-    plt.close()
+    dados_de_saida = pd.read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
+
+    dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
     for i, dim_name in enumerate(dimensoes):
+        plt.close()
         plt.plot(np.hstack((my_sensor.quat, my_sensor.pos))[:, i])
-    plt.legend(dimensoes, loc='upper right')
-    plt.title('scikit-kinematics')
-    plt.savefig('scikit-kinematics' + ".png", dpi=200)
-    plt.show()
+        plt.plot(range(dados_de_saida.shape[0]), dados_de_saida[:, i])
+        plt.legend(['predict', 'reference'], loc='upper right')
+        plt.title(dim_name)
+        plt.savefig(dim_name + ".png", dpi=200)
+        plt.show()
+
+    # dimensoes = ["qw", "qx", "qy", "qz", "px", "py", "pz", ]
+    # plt.close()
+    # for i, dim_name in enumerate(dimensoes):
+    #     plt.plot(np.hstack((my_sensor.quat, my_sensor.pos))[:, i])
+    # plt.legend(dimensoes, loc='upper right')
+    # plt.title('scikit-kinematics')
+    # # plt.savefig('scikit-kinematics' + ".png", dpi=200)
+    # plt.show()
 
 
 if __name__ == '__main__':
