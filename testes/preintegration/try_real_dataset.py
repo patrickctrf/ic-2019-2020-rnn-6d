@@ -16,10 +16,6 @@ Runs the experiment itself.
 
     model = EachSamplePreintegrationModule()
 
-    n_steps = 10
-    ones = torch.ones(1, n_steps, 1)
-    zeros = torch.zeros(1, n_steps, 1)
-
     dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[1000:, 1:]
     dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
 

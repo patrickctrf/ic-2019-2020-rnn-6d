@@ -56,6 +56,11 @@ Runs the experiment itself.
     initial_position = dataset[0, 1:4]
     initial_orientation = dataset[0, 4:8]
 
+    timestamp_imu = pd.read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 0:1]
+    timestamp_dados_de_saida = pd.read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 0:1]
+
+    _, index = find_nearest(timestamp_dados_de_saida, timestamp_imu[0])
+
     rotation_matrix = \
         axis_angle_into_rotation_matrix(
             *quaternion_into_axis_angle(
@@ -75,7 +80,7 @@ Runs the experiment itself.
     dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
     for i, dim_name in enumerate(dimensoes):
         plt.close()
-        plt.plot(np.hstack((my_sensor.quat, my_sensor.pos))[:, i])
+        plt.plot(np.hstack((my_sensor.pos, my_sensor.quat))[:, i])
         plt.plot(range(dados_de_saida.shape[0]), dados_de_saida[:, i])
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.title(dim_name)
