@@ -1,4 +1,5 @@
 import numpy as np
+import torch.nn.functional
 from matplotlib import pyplot as plt
 from pandas import read_csv
 
@@ -22,11 +23,14 @@ Runs the experiment itself.
     timestamp_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[1000:, 0:1]
     timestamp_dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 0:1]
 
+    _, index = ptk.utils.numpytools.find_nearest(timestamp_dados_de_saida, timestamp_imu[0])
+
+    dados_de_saida = dados_de_saida[index:]
+    timestamp_dados_de_saida = timestamp_dados_de_saida[index:]
+
     output_tensor = model(torch.tensor(dados_de_entrada_imu, dtype=torch.float32).unsqueeze(dim=0))[0]
 
     quaternios_de_variacao = output_tensor[:, 9:13]
-
-    _, index = ptk.utils.numpytools.find_nearest(timestamp_dados_de_saida, timestamp_imu[0])
 
     quaternios_absolutos = axis_angle_into_quaternion(
         *rotation_matrix_into_axis_angle(
@@ -35,7 +39,7 @@ Runs the experiment itself.
                     *quaternion_into_axis_angle(
                         torch.tensor(dados_de_saida[index][3:], dtype=torch.float32).unsqueeze(dim=0)
                     )
-                ),
+                ).movedim(1, 2),
                 axis_angle_into_rotation_matrix(
                     *quaternion_into_axis_angle(
                         torch.tensor(quaternios_de_variacao, dtype=torch.float32)
@@ -45,7 +49,7 @@ Runs the experiment itself.
         )
     )
 
-    output_tensor[:, 9:13] = quaternios_absolutos
+    output_tensor[:, 9:13] = torch.nn.functional.normalize(quaternios_absolutos)
 
     dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
     for i, dim_name in enumerate(dimensoes):

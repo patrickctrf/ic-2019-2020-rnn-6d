@@ -10,7 +10,7 @@ from torch.nn.utils.rnn import pack_sequence
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from ptk import timeseries_split
+from ptk.timeseries import timeseries_split
 
 # Specifying which modules to import when "import *" is called over this module.
 # Also avoiding to import the smae things this module imports
