@@ -12,6 +12,7 @@ from tqdm import tqdm
 from ptk.timeseries import *
 from ptk.utils import *
 
+
 # Funcoes que nao estou mais usando mas que podem ser uteis em algum momento
 
 
@@ -85,6 +86,19 @@ def plot_csv(csv_path="dataset-room2_512_16/mav0/mocap0/data.csv"):
         output_data.plot(kind='scatter', x=output_data.columns[0], y=key, color='red')
         plt.savefig(key + ".png", dpi=200)
         plt.show()
+
+    return
+
+
+def plot_csv_xy(csv_path="dataset-room2_512_16/mav0/mocap0/data.csv", name=""):
+    output_data = read_csv(csv_path)
+
+    plt.close()
+    output_data.plot(kind='line', x=output_data.columns[1],
+                     y=output_data.columns[2], color='red', ylabel=output_data.columns[2],
+                     title=name, legend=None)
+    plt.savefig("x_vs_y_" + name + ".png", dpi=200)
+    plt.show()
 
     return
 

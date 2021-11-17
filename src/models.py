@@ -15,7 +15,7 @@ from torch.utils.data import Subset, ConcatDataset
 from tqdm import tqdm
 
 from mydatasets import *
-from ptk import DataManager
+from ptk.utils import DataManager
 from ptk.utils.torchtools import axis_angle_into_rotation_matrix, axis_angle_into_quaternion, rotation_matrix_into_axis_angle
 
 # When importing every models from this module, make sure only models are
@@ -1925,3 +1925,39 @@ index in the original array.
         return self.identity_matrix + \
                (torch.sin(norma) / norma) * skew_matrix + \
                (1 - torch.cos(norma)) / (norma ** 2) * torch.matmul(skew_matrix, skew_matrix)
+
+
+class ORB_SLAM3(nn.Module):
+    def __init__(self, input_port, output_port):
+        """
+Receives a multi channel signal, calculate its envelopes, then calculate its
+wavelets and finally uses LSTMs to compress each Wavelet and original signal
+channel into an individual state representation.
+
+        :param input_size: Input dimension size (how many features).
+        :param hidden_layer_size: How many features there will be inside each LSTM.
+        :param output_size: Output dimension size (how many features).
+        :param n_lstm_units: How many stacked LSTM cells (or units).
+        :param epochs: The number of epochs to train. The final model after
+        train will be the one with best VALIDATION loss, not necessarily the
+        model found after whole "epochs" number.
+        :param training_batch_size: Size of each mini-batch during training
+        process. If number os samples is not a multiple of
+        "training_batch_size", the final batch will just be smaller than the
+        others.
+        :param validation_percent: The percentage of samples reserved for
+        validation (cross validation) during training inside fit() method.
+        :param bidirectional: If the LSTM units will be bidirectional.
+        :param device: PyTorch device, such as torch.device("cpu") or
+        torch.device("cuda:0").
+        """
+        super().__init__()
+
+        return
+
+    def forward(self, input_seq):
+        lstm_out, _ = self.feature_extractor(input_seq.movedim(-2, -1))
+
+        # All batch size, whatever sequence length, forward direction and
+        # lstm output size (hidden size).
+        return lstm_out[:, -1, :].flatten(start_dim=1)
