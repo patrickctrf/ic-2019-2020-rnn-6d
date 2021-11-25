@@ -38,7 +38,7 @@ Runs the experiment itself.
 
     quaternios_absolutos = axis_angle_into_quaternion(
         *rotation_matrix_into_axis_angle(
-            np.matmul(
+            torch.matmul(
                 axis_angle_into_rotation_matrix(
                     *quaternion_into_axis_angle(
                         torch.tensor(dados_de_saida[index][3:], dtype=torch.float32).unsqueeze(dim=0)
@@ -53,7 +53,7 @@ Runs the experiment itself.
         )
     )
 
-    output_tensor[:, 9:13] = quaternios_absolutos
+    output_tensor[:, 9:13] = torch.nn.functional.normalize(quaternios_absolutos)
 
     # print("\n".join("{} {}".format(x, y) for x, y in zip(quaternion_into_axis_angle(output_tensor[:, 9:13]), quaternion_into_axis_angle(torch.tensor(dados_de_saida[:, 3:])))))
 
@@ -82,7 +82,7 @@ Runs the experiment itself.
 
     for quaternio1, quaternio2 in zip(output_tensor[:, 6 + 3: 6 + 3 + 4], dados_de_saida[:, 3:]):
         dicionario1 = dict(zip(["w", "nx", "ny", "nz"], quaternio1))
-        print(quaternio1, quaternio2)
+        # print(quaternio1, quaternio2)
         angular_queue1.put(dicionario1)
         dicionario2 = dict(zip(["w", "nx", "ny", "nz"], quaternio2))
         angular_queue2.put(dicionario2)
