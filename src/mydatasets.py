@@ -153,8 +153,9 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             _, x_finish_idx = find_nearest(self.input_timestamp, self.output_timestamp[window_start_idx + window_size])
 
             x = self.input_data[x_start_idx: x_finish_idx + 1]
-            # Position variation. Quaternion variation not ready yet.
+            # Initialize y with proper shape. Neither quaternion or position are calculated this way anymore
             y = self.output_data[window_start_idx + window_size] - self.output_data[window_start_idx]
+
             # Calculate quaternion variation.Converts into rotation matriz first
             y[3:] = \
                 axis_angle_into_quaternion(
@@ -178,6 +179,22 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
                         )
                     )
                 )
+
+            # Position variation procedure. First, get body-frame orientation
+            # This matrix describes the convertion from reference or ground
+            # truth frame to IMU or body frame
+            rotation_matrix_body_to_ref = axis_angle_into_rotation_matrix(
+                *quaternion_into_axis_angle(
+                    self.output_data[window_start_idx][3:]
+                )
+            ).T
+
+            # Position variation seem from body frame.
+            y[:3] = \
+                np.matmul(rotation_matrix_body_to_ref,
+                          self.output_data[window_start_idx + window_size]) - \
+                np.matmul(rotation_matrix_body_to_ref,
+                          self.output_data[window_start_idx])
 
             # We add gaussian noise to data, if configured to.
             if self.noise is not None:

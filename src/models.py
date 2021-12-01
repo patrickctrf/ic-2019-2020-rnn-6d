@@ -1685,7 +1685,7 @@ timestamp indicating the time that position was estimated.
 
         # Converting anxis-angle into skew, and skew into rotation matrix.
         self.orientation_predictions_buffer[0] = \
-            self.exp_matrix(
+            torch.matrix_exp(
                 self.skew_matrix_from_tensor(
                     axis * angle
                 )
@@ -1720,7 +1720,7 @@ predictions.
         self.w_imu_buffer = \
             torch.cat(
                 (self.w_imu_buffer,
-                 self.exp_matrix(self.delta_t * self.skew_matrix_from_tensor(w_sample)).view(1, 3, 3)
+                 torch.matrix_exp(self.delta_t * self.skew_matrix_from_tensor(w_sample)).view(1, 3, 3)
                  ), dim=0)
 
         # Informs this thread that new samples have been generated.
@@ -1917,14 +1917,6 @@ index in the original array.
                             dtype=self.dtype,
                             device=self.device,
                             requires_grad=False)
-
-    def exp_matrix(self, skew_matrix):
-
-        norma = torch.norm(skew_matrix)
-
-        return self.identity_matrix + \
-               (torch.sin(norma) / norma) * skew_matrix + \
-               (1 - torch.cos(norma)) / (norma ** 2) * torch.matmul(skew_matrix, skew_matrix)
 
 
 class ORB_SLAM3(nn.Module):
