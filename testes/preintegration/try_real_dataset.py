@@ -30,6 +30,12 @@ Runs the experiment itself.
     timestamp_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[1000:, 0:1]
     timestamp_dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 0:1]
 
+    # Pulando 28 segundos
+    dados_de_entrada_imu = dados_de_entrada_imu[5600:]
+    dados_de_saida = dados_de_saida[5600:]
+    timestamp_imu = timestamp_imu[5600:]
+    timestamp_dados_de_saida = timestamp_dados_de_saida[5600:]
+
     output_tensor = model(torch.tensor(dados_de_entrada_imu, dtype=torch.float32).unsqueeze(dim=0))[0]
 
     quaternios_de_variacao = torch.nn.functional.normalize(output_tensor[:, 9:13])
