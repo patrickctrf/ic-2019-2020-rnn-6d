@@ -467,9 +467,9 @@ error within CUDA.
                 # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
-                nn.BatchNorm1d(input_size, affine=False),
-                SignalEnvelope(n_channels=input_size),
-                Conv1d(4 * input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
+                # nn.BatchNorm1d(input_size, affine=False),
+                # SignalEnvelope(n_channels=input_size),
+                Conv1d(1 * input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
                 Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
                 # nn.Dropout2d(p=0.5),
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
@@ -802,15 +802,15 @@ error within CUDA.
         #                          n_lstm_units=n_lstm_units,
         #                          bidirectional=bidirectional)
 
-        self.feature_extractor = \
-            ConvLSTM(input_size=input_size,
-                     hidden_layer_size=hidden_layer_size,
-                     output_size=output_size,
-                     n_lstm_units=n_lstm_units,
-                     bidirectional=bidirectional)
+        # self.feature_extractor = \
+        #     ConvLSTM(input_size=input_size,
+        #              hidden_layer_size=hidden_layer_size,
+        #              output_size=output_size,
+        #              n_lstm_units=n_lstm_units,
+        #              bidirectional=bidirectional)
 
-        # self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
-        #                                                 output_size=output_size)
+        self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
+                                                        output_size=output_size)
 
         # Assim nao precisamos adaptar a rede densa a uma saida de CNN ou LSTM,
         # ja pegamos a rede adaptada do proprio extrator de
@@ -933,10 +933,13 @@ overflow the memory.
         # train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         # val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
-                                       euroc_mh1_dataset, euroc_mh5_dataset,
-                                       euroc_v2_03_dataset, euroc_mh4_dataset])
-        val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
+        # train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
+        #                                euroc_mh1_dataset, euroc_mh5_dataset,
+        #                                euroc_v2_03_dataset, euroc_mh4_dataset])
+        # val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
+
+        train_dataset = ConcatDataset([euroc_v1_01_dataset, ])
+        val_dataset = ConcatDataset([euroc_mh3_dataset, ])
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
