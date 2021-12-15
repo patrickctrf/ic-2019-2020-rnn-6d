@@ -955,9 +955,9 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = nn.MSELoss()  # PosAndAngleLoss()
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.01, )  # momentum=0.9, nesterov=True)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
-        scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=0.5, last_epoch=-1)
+        scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=0.1, last_epoch=-1)
         # scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.1)
         # scheduler = lr_scheduler.OneCycleLR(self.optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, final_div_factor=1e3)
 

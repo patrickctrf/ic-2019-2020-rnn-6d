@@ -25,7 +25,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=1, bidirectional=False, use_amp=True,
-                           output_size=7 * 2, training_batch_size=1024, epochs=4, device=device, validation_percent=0.2)
+                           output_size=7 * 2, training_batch_size=1024, epochs=3, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
     # model = torch.load("best_model.pth")
@@ -52,51 +52,51 @@ Runs the experiment itself.
 
     print("creation_time carregado: ", model.creation_time)
 
-    # predict = []
-    # reference = []
-    # dataloader = DataLoader(dataset=euroc_mh3_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
-    # for i, (x, y) in tqdm(enumerate(dataloader), total=len(dataloader)):
-    #     y_hat = model(x.view(1, x.shape[0], x.shape[1])).view(-1)
-    #     predict.append(y_hat.detach().cpu().numpy())
-    #     reference.append(y.detach().cpu().numpy())
-    #
-    # predict = array(predict)
-    # reference = array(reference)
-    #
-    # dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
-    # for i, dim_name in enumerate(dimensoes):
-    #     plt.close()
-    #     plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
-    #     plt.legend(['predict', 'reference'], loc='upper right')
-    #     plt.title(dim_name)
-    #     plt.savefig(dim_name + ".png", dpi=200)
-    #     plt.show()
-
-    dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 1:]
-    dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
-
     predict = []
-    for i in tqdm(range(0, dados_de_entrada_imu.shape[0] - 30, 30)):
-        predict.append(
-            model(
-                torch.tensor(dados_de_entrada_imu[i:i + 30].reshape(-1, 30, 6), device=device, dtype=torch.float)
-            )
-        )
+    reference = []
+    dataloader = DataLoader(dataset=euroc_mh3_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
+    for i, (x, y) in tqdm(enumerate(dataloader), total=len(dataloader)):
+        y_hat = model(x.view(1, x.shape[1], x.shape[2])).view(-1)
+        predict.append(y_hat.detach().cpu().numpy())
+        reference.append(y.detach().cpu().numpy())
 
-    predict = torch.cat(predict).detach().cpu().numpy()
-    predict = np.cumsum(predict, axis=0)
+    predict = array(predict)[:, 7:]
+    reference = array(reference)[:, 0, :]
 
     dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
     for i, dim_name in enumerate(dimensoes):
         plt.close()
-        plt.plot(range(0, dados_de_saida.shape[0], dados_de_saida.shape[0] // predict.shape[0])[:predict.shape[0]], predict[:, i])
-        plt.plot(range(dados_de_saida.shape[0]), dados_de_saida[:, i])
+        plt.plot(arange(predict.shape[0]), predict[:, i], arange(reference.shape[0]), reference[:, i])
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.title(dim_name)
         plt.savefig(dim_name + ".png", dpi=200)
         plt.show()
 
-    # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
+    # dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 1:]
+    # dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
+    #
+    # predict = []
+    # for i in tqdm(range(0, dados_de_entrada_imu.shape[0] - 30, 30)):
+    #     predict.append(
+    #         model(
+    #             torch.tensor(dados_de_entrada_imu[i:i + 30].reshape(-1, 30, 6), device=device, dtype=torch.float)
+    #         )
+    #     )
+    #
+    # predict = torch.cat(predict).detach().cpu().numpy()
+    # predict = np.cumsum(predict, axis=0)
+    #
+    # dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
+    # for i, dim_name in enumerate(dimensoes):
+    #     plt.close()
+    #     plt.plot(range(0, dados_de_saida.shape[0], dados_de_saida.shape[0] // predict.shape[0])[:predict.shape[0]], predict[:, i])
+    #     plt.plot(range(dados_de_saida.shape[0]), dados_de_saida[:, i])
+    #     plt.legend(['predict', 'reference'], loc='upper right')
+    #     plt.title(dim_name)
+    #     plt.savefig(dim_name + ".png", dpi=200)
+    #     plt.show()
+    #
+    # # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 
     print(model)
 
