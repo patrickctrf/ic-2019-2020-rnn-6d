@@ -192,9 +192,9 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             # Position variation seem from body frame.
             y[:3] = \
                 np.matmul(rotation_matrix_body_to_ref,
-                          self.output_data[window_start_idx + window_size]) - \
+                          self.output_data[window_start_idx + window_size][:3]) - \
                 np.matmul(rotation_matrix_body_to_ref,
-                          self.output_data[window_start_idx])
+                          self.output_data[window_start_idx][:3])
 
             # We add gaussian noise to data, if configured to.
             if self.noise is not None:
