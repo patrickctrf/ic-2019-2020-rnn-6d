@@ -39,7 +39,7 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    # model.fit()
+    model.fit()
 
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
     device = torch.device("cpu")
