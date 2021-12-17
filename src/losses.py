@@ -36,10 +36,10 @@ class PosAndAngleLoss(nn.Module):
         super().__init__()
         self.alpha = alpha
         self.degree = degree
-        self.translational_metric = L1Loss()
+        self.translational_metric = MSELoss()
         self.angular_metric = CosineSimilarity(dim=1)
 
-    def forward(self, y_hat, y, var):  # , var[:, 0:3]) \
+    def forward(self, y_hat, y, var=0):  # , var[:, 0:3]) \
         return self.translational_metric(y_hat[:, 0:3], y[:, 0:3]) \
                - \
                torch.mean(self.angular_metric(y_hat[:, 3:], y[:, 3:]))
