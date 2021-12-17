@@ -476,11 +476,11 @@ error within CUDA.
                 # nn.Dropout2d(p=0.5),
                 # Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
                 Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters), nn.BatchNorm1d(3 * n_base_filters),
-                SqueezeAndExcitationBlock1D(3 * n_base_filters),
+                # SqueezeAndExcitationBlock1D(3 * n_base_filters),
                 Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters), nn.BatchNorm1d(2 * n_base_filters),
-                SqueezeAndExcitationBlock1D(2 * n_base_filters),
+                # SqueezeAndExcitationBlock1D(2 * n_base_filters),
                 Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features), nn.BatchNorm1d(n_output_features),
-                SqueezeAndExcitationBlock1D(n_output_features)
+                # SqueezeAndExcitationBlock1D(n_output_features)
             )
 
         self.sum_layer = SumLayer(n_output_features)
@@ -933,13 +933,13 @@ overflow the memory.
         # train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         # val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        # train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
-        #                                euroc_mh1_dataset, euroc_mh5_dataset,
-        #                                euroc_v2_03_dataset, euroc_mh4_dataset])
-        # val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
+        train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
+                                       euroc_mh1_dataset, euroc_mh5_dataset,
+                                       euroc_v2_03_dataset, euroc_mh4_dataset])
+        val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
-        train_dataset = ConcatDataset([euroc_v1_01_dataset, ])
-        val_dataset = ConcatDataset([euroc_mh3_dataset, ])
+        # train_dataset = ConcatDataset([euroc_v1_01_dataset, ])
+        # val_dataset = ConcatDataset([euroc_mh3_dataset, ])
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
