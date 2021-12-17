@@ -39,7 +39,7 @@ Runs the experiment itself.
 
     # Let's go fit! Comment if only loading pretrained model.
     # model.fit(X, y)
-    # model.fit()
+    model.fit()
 
     # ===========PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]============
     device = torch.device("cpu")
@@ -70,7 +70,7 @@ Runs the experiment itself.
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.title(dim_name)
         plt.savefig(dim_name + ".png", dpi=200)
-        plt.show()
+        # plt.show()
 
     dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 1:]
     dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
@@ -94,7 +94,7 @@ Runs the experiment itself.
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.title(dim_name)
         plt.savefig(dim_name + ".png", dpi=200)
-        plt.show()
+        # plt.show()
 
     # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 
