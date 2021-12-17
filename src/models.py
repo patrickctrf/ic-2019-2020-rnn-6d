@@ -848,9 +848,11 @@ input sequence and returns the prediction for the final step.
         #
         # predictions = self.dense_network(output_seq)
 
-        # normalize quaternions
-        predictions[3:7] = torch.nn.functional.normalize(predictions[3:7])
-        return predictions
+        pos = predictions[:, 0: 3]
+        quat = torch.nn.functional.normalize(predictions[:, 3:7])
+        var = predictions[:, 7:]
+
+        return torch.cat((pos, quat, var), 1)
 
     def fit(self):
         """
@@ -956,7 +958,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = PosAndAngleLoss() # MSELoss
+        if self.loss_function is None: self.loss_function = PosAndAngleLoss()  # MSELoss
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=1.0, last_epoch=-1)
