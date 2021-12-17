@@ -181,15 +181,15 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
                 )
 
             # Position variation procedure. First, get body-frame orientation
-            # This matrix describes the convertion from reference or ground
-            # truth frame to IMU or body frame
+            # This matrix describes the convertion from reference (or ground
+            # truth) frame to IMU (or body) frame
             rotation_matrix_body_to_ref = axis_angle_into_rotation_matrix(
                 *quaternion_into_axis_angle(
                     self.output_data[window_start_idx][3:]
                 )
             ).T
 
-            # Position variation seem from body frame.
+            # Position variation seen from body frame.
             y[:3] = \
                 np.matmul(rotation_matrix_body_to_ref,
                           self.output_data[window_start_idx + window_size][:3]) - \

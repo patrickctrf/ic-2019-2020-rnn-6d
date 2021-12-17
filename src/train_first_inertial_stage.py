@@ -60,7 +60,7 @@ Runs the experiment itself.
         predict.append(y_hat.detach().cpu().numpy())
         reference.append(y.detach().cpu().numpy())
 
-    predict = array(predict)[:, 7:]
+    predict = array(predict)[:, :7]
     reference = array(reference)[:, 0, :]
 
     dimensoes = ["px", "py", "pz", "qw", "qx", "qy", "qz"]
