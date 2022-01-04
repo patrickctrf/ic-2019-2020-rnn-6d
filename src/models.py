@@ -459,7 +459,7 @@ error within CUDA.
         pooling_output_size = 1
 
         n_base_filters = 8
-        n_output_features = 8
+        n_output_features = 6 * 8
         self.feature_extractor = \
             Sequential(
                 #
@@ -475,11 +475,11 @@ error within CUDA.
                 Conv1d(2 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(3 * n_base_filters),
                 # nn.Dropout2d(p=0.5),
                 # Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(),  # nn.BatchNorm1d(4 * n_base_filters),
-                Conv1d(3 * n_base_filters, 3 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=3 * n_base_filters), nn.BatchNorm1d(3 * n_base_filters),
+                Conv1d(3 * n_base_filters, 4 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=4 * n_base_filters), nn.BatchNorm1d(4 * n_base_filters),
                 # SqueezeAndExcitationBlock1D(3 * n_base_filters),
-                Conv1d(3 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=2 * n_base_filters), nn.BatchNorm1d(2 * n_base_filters),
+                Conv1d(4 * n_base_filters, 5 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=5 * n_base_filters), nn.BatchNorm1d(5 * n_base_filters),
                 # SqueezeAndExcitationBlock1D(2 * n_base_filters),
-                Conv1d(2 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features), nn.BatchNorm1d(n_output_features),
+                Conv1d(5 * n_base_filters, n_output_features, (3,), dilation=(2,), stride=(1,)), nn.PReLU(num_parameters=n_output_features), nn.BatchNorm1d(n_output_features),
                 # SqueezeAndExcitationBlock1D(n_output_features)
             )
 
@@ -487,11 +487,13 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 16), nn.PReLU(num_parameters=16),
-            nn.BatchNorm1d(16, affine=True),  # nn.Dropout(p=0.5),
+            nn.Linear(2 * pooling_output_size * n_output_features, 128), nn.PReLU(num_parameters=128),
+            nn.BatchNorm1d(128, affine=True),
+            nn.Linear(128, 64), nn.PReLU(num_parameters=64),
+            nn.BatchNorm1d(64, affine=True),  # nn.Dropout(p=0.5),
             # nn.Linear(16, 16), nn.Tanh(),
             # nn.BatchNorm1d(16, affine=True),
-            nn.Linear(16, self.output_size)
+            nn.Linear(64, self.output_size)
         )
         return
 
@@ -959,9 +961,9 @@ overflow the memory.
         epochs = self.epochs
         best_validation_loss = 999999
         if self.loss_function is None: self.loss_function = PosAndAngleLoss()  # MSELoss
-        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.001, )  # momentum=0.9, nesterov=True)
+        if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
-        scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=1.0, last_epoch=-1)
+        scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=0.1, last_epoch=-1)
         # scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.1)
         # scheduler = lr_scheduler.OneCycleLR(self.optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, final_div_factor=1e3)
 

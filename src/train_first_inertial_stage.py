@@ -25,7 +25,7 @@ Runs the experiment itself.
     # return
 
     model = InertialModule(input_size=6, hidden_layer_size=32, n_lstm_units=1, bidirectional=False, use_amp=True,
-                           output_size=7 * 2, training_batch_size=1024, epochs=30, device=device, validation_percent=0.2)
+                           output_size=7 * 2, training_batch_size=1024, epochs=5, device=device, validation_percent=0.2)
 
     # model.load_state_dict(torch.load("best_model_state_dict.pth"))
     # model = torch.load("best_model.pth")
@@ -54,7 +54,7 @@ Runs the experiment itself.
 
     predict = []
     reference = []
-    dataloader = DataLoader(dataset=euroc_mh3_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
+    dataloader = DataLoader(dataset=euroc_v1_01_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
     for i, (x, y) in tqdm(enumerate(dataloader), total=len(dataloader)):
         y_hat = model(x.view(1, x.shape[1], x.shape[2])).view(-1)
         predict.append(y_hat.detach().cpu().numpy())
@@ -70,7 +70,7 @@ Runs the experiment itself.
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.title(dim_name)
         plt.savefig(dim_name + ".png", dpi=200)
-        # plt.show()
+        plt.show()
 
     dados_de_entrada_imu = read_csv("dataset-files/V1_01_easy/mav0/imu0/data.csv").to_numpy()[:, 1:]
     dados_de_saida = read_csv("dataset-files/V1_01_easy/mav0/state_groundtruth_estimate0/data.csv").to_numpy()[:, 1:]
@@ -94,7 +94,7 @@ Runs the experiment itself.
         plt.legend(['predict', 'reference'], loc='upper right')
         plt.title(dim_name)
         plt.savefig(dim_name + ".png", dpi=200)
-        # plt.show()
+        plt.show()
 
     # ===========FIM-DE-PREDICAO-["px", "py", "pz", "qw", "qx", "qy", "qz"]=====
 
