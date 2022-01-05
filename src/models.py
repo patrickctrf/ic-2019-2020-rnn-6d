@@ -458,8 +458,8 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 8
-        n_output_features = 6 * 8
+        n_base_filters = 64
+        n_output_features = 6 * 64
         self.feature_extractor = \
             Sequential(
                 #
@@ -467,7 +467,7 @@ error within CUDA.
                 # ResBlock(1 * n_base_filters, 2 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(2 * n_base_filters, 4 * n_base_filters, (7,), dilation=1, stride=1),
                 # ResBlock(4 * n_base_filters, n_output_features, (7,), dilation=1, stride=1),
-                # nn.BatchNorm1d(input_size, affine=False),
+                nn.BatchNorm1d(input_size, affine=False),
                 # SignalEnvelope(n_channels=input_size),
                 Conv1d(1 * input_size, 1 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(1 * n_base_filters),
                 Conv1d(1 * n_base_filters, 2 * n_base_filters, (3,), dilation=(2,), stride=(1,)), nn.LeakyReLU(), nn.BatchNorm1d(2 * n_base_filters),
@@ -487,13 +487,13 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 128), nn.PReLU(num_parameters=128),
-            nn.BatchNorm1d(128, affine=True),
-            nn.Linear(128, 64), nn.PReLU(num_parameters=64),
-            nn.BatchNorm1d(64, affine=True),  # nn.Dropout(p=0.5),
+            nn.Linear(2 * pooling_output_size * n_output_features, 256), nn.PReLU(num_parameters=256),
+            nn.BatchNorm1d(256, affine=True),
+            nn.Linear(256, 128), nn.PReLU(num_parameters=128),
+            nn.BatchNorm1d(128, affine=True),  # nn.Dropout(p=0.5),
             # nn.Linear(16, 16), nn.Tanh(),
             # nn.BatchNorm1d(16, affine=True),
-            nn.Linear(64, self.output_size)
+            nn.Linear(128, self.output_size)
         )
         return
 
