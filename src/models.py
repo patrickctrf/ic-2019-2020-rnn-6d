@@ -960,7 +960,7 @@ overflow the memory.
 
         epochs = self.epochs
         best_validation_loss = 999999
-        if self.loss_function is None: self.loss_function = PosAndAngleLoss()  # MSELoss
+        if self.loss_function is None: self.loss_function = MSELoss()  # PosAndAngleLoss()
         if self.optimizer is None: self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1, )  # momentum=0.9, nesterov=True)
         scaler = GradScaler(enabled=self.use_amp)
         scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=0.1, last_epoch=-1)
