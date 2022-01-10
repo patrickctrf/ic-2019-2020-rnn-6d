@@ -458,8 +458,8 @@ error within CUDA.
         # and it casts conv outputs to 1 feature per channel
         pooling_output_size = 1
 
-        n_base_filters = 8
-        n_output_features = 6 * 8
+        n_base_filters = 128
+        n_output_features = 6 * 128
         self.feature_extractor = \
             Sequential(
                 #
@@ -487,12 +487,12 @@ error within CUDA.
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(pooling_output_size)
 
         self.dense_network = Sequential(
-            nn.Linear(2 * pooling_output_size * n_output_features, 128), nn.PReLU(num_parameters=128),
-            nn.BatchNorm1d(128, affine=True),
+            nn.Linear(2 * pooling_output_size * n_output_features, 4096), nn.PReLU(num_parameters=4096),
+            nn.BatchNorm1d(4096, affine=True),
             # nn.BatchNorm1d(128, affine=True),  # nn.Dropout(p=0.5),
             # # nn.Linear(16, 16), nn.Tanh(),
             # # nn.BatchNorm1d(16, affine=True),
-            nn.Linear(128, self.output_size)
+            nn.Linear(4096, self.output_size)
         )
         return
 
@@ -794,14 +794,14 @@ error within CUDA.
         # # and it casts conv outputs to 1 feature per channel
         # pooling_output_size = 1
         #
-        n_base_filters = 8
-        n_output_features = 8
-        self.feature_extractor = \
-            LSTMLatentFeatures(input_size=input_size,
-                               hidden_layer_size=hidden_layer_size,
-                               output_size=output_size,
-                               n_lstm_units=n_lstm_units,
-                               bidirectional=bidirectional)
+        # n_base_filters = 8
+        # n_output_features = 8
+        # self.feature_extractor = \
+        #     LSTMLatentFeatures(input_size=input_size,
+        #                        hidden_layer_size=hidden_layer_size,
+        #                        output_size=output_size,
+        #                        n_lstm_units=n_lstm_units,
+        #                        bidirectional=bidirectional)
 
         # self.feature_extractor = \
         #     ConvLSTM(input_size=input_size,
@@ -810,8 +810,8 @@ error within CUDA.
         #              n_lstm_units=n_lstm_units,
         #              bidirectional=bidirectional)
 
-        # self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
-        #                                                 output_size=output_size)
+        self.feature_extractor = Conv1DFeatureExtractor(input_size=input_size,
+                                                        output_size=output_size)
 
         # Assim nao precisamos adaptar a rede densa a uma saida de CNN ou LSTM,
         # ja pegamos a rede adaptada do proprio extrator de
@@ -831,23 +831,23 @@ input sequence and returns the prediction for the final step.
 
         # input_seq = self.preintegration_module(input_seq)
 
-        # # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
-        # # # convolucao e precisam vir no meio para o pytorch
-        # # input_seq = movedim(input_seq, -2, -1)
-        #
-        # output_seq = self.feature_extractor(input_seq)
-        #
-        # predictions = self.dense_network(output_seq.flatten(start_dim=1))
-        #
+        # # As features (px, py, pz, qw, qx, qy, qz) sao os "canais" da
+        # # convolucao e precisam vir no meio para o pytorch
+        # input_seq = movedim(input_seq, -2, -1)
+
         output_seq = self.feature_extractor(input_seq)
 
-        # All batch size, whatever sequence length, forward direction and
-        # lstm output size (hidden size).
-        # We only want the last output of lstm (end of sequence), that is
-        # the reason of '[:,-1,:]'.
-        output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        predictions = self.dense_network(output_seq.flatten(start_dim=1))
 
-        predictions = self.dense_network(output_seq)
+        # output_seq = self.feature_extractor(input_seq)
+        #
+        # # All batch size, whatever sequence length, forward direction and
+        # # lstm output size (hidden size).
+        # # We only want the last output of lstm (end of sequence), that is
+        # # the reason of '[:,-1,:]'.
+        # output_seq = output_seq.view(output_seq.shape[0], -1, self.num_directions * self.hidden_layer_size)[:, -1, :]
+        #
+        # predictions = self.dense_network(output_seq)
 
         pos = predictions[:, 0: 3]
         quat = torch.nn.functional.normalize(predictions[:, 3:7])
@@ -938,13 +938,13 @@ overflow the memory.
         # train_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage)))
         # val_dataset = Subset(room1_tum_dataset, arange(int(len(room1_tum_dataset) * self.train_percentage), len(room1_tum_dataset)))
 
-        train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
-                                       euroc_mh1_dataset, euroc_mh5_dataset,
-                                       euroc_v2_03_dataset, euroc_mh4_dataset])
-        val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
+        # train_dataset = ConcatDataset([euroc_v1_01_dataset, euroc_v1_02_dataset,
+        #                                euroc_mh1_dataset, euroc_mh5_dataset,
+        #                                euroc_v2_03_dataset, euroc_mh4_dataset])
+        # val_dataset = ConcatDataset([euroc_v2_02_dataset, euroc_mh3_dataset])
 
-        # train_dataset = ConcatDataset([euroc_v1_01_dataset, ])
-        # val_dataset = ConcatDataset([euroc_mh3_dataset, ])
+        train_dataset = ConcatDataset([euroc_v1_01_dataset, ])
+        val_dataset = ConcatDataset([euroc_mh3_dataset, ])
 
         train_loader = CustomDataLoader(dataset=train_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
         val_loader = CustomDataLoader(dataset=val_dataset, batch_size=1, shuffle=True, pin_memory=True, num_workers=4, multiprocessing_context='spawn')
