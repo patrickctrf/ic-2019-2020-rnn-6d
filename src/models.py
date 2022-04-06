@@ -3,6 +3,7 @@ import time
 from threading import Thread, Event
 
 import torch
+import zmq
 from numpy import arange, array
 from numpy.linalg import norm
 from skimage.metrics import mean_squared_error
@@ -1930,34 +1931,34 @@ index in the original array.
 class ORB_SLAM3(nn.Module):
     def __init__(self, input_port, output_port):
         """
-Receives a multi channel signal, calculate its envelopes, then calculate its
-wavelets and finally uses LSTMs to compress each Wavelet and original signal
-channel into an individual state representation.
-
-        :param input_size: Input dimension size (how many features).
-        :param hidden_layer_size: How many features there will be inside each LSTM.
-        :param output_size: Output dimension size (how many features).
-        :param n_lstm_units: How many stacked LSTM cells (or units).
-        :param epochs: The number of epochs to train. The final model after
-        train will be the one with best VALIDATION loss, not necessarily the
-        model found after whole "epochs" number.
-        :param training_batch_size: Size of each mini-batch during training
-        process. If number os samples is not a multiple of
-        "training_batch_size", the final batch will just be smaller than the
-        others.
-        :param validation_percent: The percentage of samples reserved for
-        validation (cross validation) during training inside fit() method.
-        :param bidirectional: If the LSTM units will be bidirectional.
-        :param device: PyTorch device, such as torch.device("cpu") or
-        torch.device("cuda:0").
         """
         super().__init__()
+
+        # setup socket
+        context = zmq.Context()
+        zmq_socket = context.socket(zmq.PAIR)
+        zmq_socket.bind("tcp://127.0.0.1:6009")
+
+
 
         return
 
     def forward(self, input_seq):
-        lstm_out, _ = self.feature_extractor(input_seq.movedim(-2, -1))
+        # Read file content
+        img_number = 1403638128445096960 + i
+        with open("/home/patrickctrf/Documentos/ORB_SLAM3/MH04/mav0/cam0/data/" +
+                 img_files_names[i], 'rb') as f:
+            bytes = bytearray(f.read())
 
-        # All batch size, whatever sequence length, forward direction and
-        # lstm output size (hidden size).
-        return lstm_out[:, -1, :].flatten(start_dim=1)
+            # Encode to send
+            strng = base64.b64encode(bytes)
+            print("Sending file over")
+            print("\n\nEncoded message size: ", len(bytes))  # 4194328 in my case
+            print("\n\nEncoded message size: ", len(strng))  # 4194328 in my case
+            zmq_socket.send(strng)
+            pose_dict = json.loads(zmq_socket.recv_string())
+            print("pose_dict: ", pose_dict)
+
+            return
+
+

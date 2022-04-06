@@ -1,0 +1,3 @@
+conda activate evo
+
+evo_traj euroc -as inertialORB.txt orb.txt BASALT.csv --ref=gt_mh04.csv -p --plot_mode=xy

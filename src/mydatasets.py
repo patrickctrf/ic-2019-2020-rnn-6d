@@ -1,5 +1,7 @@
 import itertools
 from multiprocessing.dummy import Pool as ThreadPool
+from os import listdir
+from os.path import join, isfile, splitext
 
 import numpy as np
 import torch
@@ -8,13 +10,14 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from torch import from_numpy, cat
 from torch.nn.utils.rnn import pack_sequence
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.dataset import T_co
 from tqdm import tqdm
 
 from ptk.timeseries import timeseries_split
 
 # Specifying which modules to import when "import *" is called over this module.
 # Also avoiding to import the smae things this module imports
-__all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset", "ParallelBatchTimeseriesDataset"]
+__all__ = ["PackingSequenceDataloader", "AsymetricalTimeseriesDataset", "BatchTimeseriesDataset", "CustomDataLoader", "PlotLstmDataset", "ParallelBatchTimeseriesDataset", "ImageDataset"]
 
 from ptk.utils.numpytools import find_nearest, quaternion_into_axis_angle, axis_angle_into_rotation_matrix, rotation_matrix_into_axis_angle, axis_angle_into_quaternion
 
@@ -523,6 +526,25 @@ Get itens from dataset according to idx passed. The return is in numpy arrays.
             raise IndexError('Index out of range')
 
         return from_numpy(self.X[idx]), 0
+
+    def __len__(self):
+        return self.length
+
+
+class ImageDataset(Dataset):
+    def __init__(self, imgs_dir_str="/home/patrickctrf/Documentos/ORB_SLAM3/MH04/mav0/cam0/data/"):
+        super().__init__()
+        self.imgs_dir_str = imgs_dir_str
+        self.img_files_names = [f for f in listdir(imgs_dir_str) if isfile(join(self.imgs_dir_str, f))]
+        self.img_files_names.sort()
+        self.length = len(self.img_files_names)
+
+    def __getitem__(self, index):
+        with open(join(self.imgs_dir_str, self.img_files_names[index]), 'rb') as f:
+            img_bytes = bytearray(f.read())
+
+        # return img timestamp and img itself as bytes
+        return int(splitext(self.img_files_names[index])[0]), img_bytes
 
     def __len__(self):
         return self.length
