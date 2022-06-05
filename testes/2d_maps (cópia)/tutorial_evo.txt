@@ -1,0 +1,6 @@
+conda activate evo
+
+evo_traj euroc -as inertialORB.txt orb.txt BASALT.csv --ref=gt_mh04.csv -p --plot_mode=xy
+
+# Para usar o formato EUROC, o separador do csv tem que ser virgulas!
+# Para usar TUM, tem que ser separado por ESPACOS em branco.

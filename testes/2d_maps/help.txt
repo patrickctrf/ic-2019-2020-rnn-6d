@@ -1,0 +1,19 @@
+cnn 
+
+lstm
+
+cnn + features
+
+lstm + features
+
+BASALT
+
+ORB puro
+
+
+
+
+
+De cada uma mostrar APE e RPE, RMSE e máx, além do tempo de amostra
+
+
